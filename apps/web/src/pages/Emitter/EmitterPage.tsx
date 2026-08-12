@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { createSignalingSocket } from "../../services/signaling";
 
 function EmitterPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -39,6 +41,43 @@ function EmitterPage() {
       videoRef.current.srcObject = null;
     }
   }
+
+  useEffect(() => {
+  const socket = createSignalingSocket();
+
+  socket.onopen = () => {
+    console.log(
+      "Connected to signaling server"
+    );
+
+    socket.send(
+      JSON.stringify({
+        type: "device_online",
+        device_name: "PC-Test",
+      })
+    );
+  };
+
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    console.log(
+      "Signaling message:",
+      data
+    );
+  };
+
+  socket.onerror = (error) => {
+    console.error(
+      "WebSocket error:",
+      error
+    );
+  };
+
+  return () => {
+    socket.close();
+  };
+}, []);
 
   return (
     <main>
