@@ -224,8 +224,7 @@ function DevicePage() {
   setStatus(
     "Requesting camera..."
   );
-}
-
+ }
 
   function createPeerConnection() {
     const peerConnection =
