@@ -2,9 +2,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 
 class SignalingConsumer(AsyncJsonWebsocketConsumer):
-    async def connect(self):
-        self.room_name = "sentinel"
+    room_name = "sentinel"
 
+    async def connect(self):
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name,
@@ -24,22 +24,23 @@ class SignalingConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def receive_json(self, content):
-        message_type = content.get("type")
+        """
+        For the MVP, Django simply relays signaling
+        messages to every connected Sentinel client.
 
-        if message_type == "device_online":
-            await self.channel_layer.group_send(
-                self.room_name,
-                {
-                    "type": "device_online_message",
-                    "device_name": content.get(
-                        "device_name",
-                        "Unknown device",
-                    ),
-                },
-            )
+        React clients decide whether a message
+        is intended for them.
+        """
 
-    async def device_online_message(self, event):
-        await self.send_json({
-            "type": "device_online",
-            "device_name": event["device_name"],
-        })
+        await self.channel_layer.group_send(
+            self.room_name,
+            {
+                "type": "relay_message",
+                "payload": content,
+            },
+        )
+
+    async def relay_message(self, event):
+        await self.send_json(
+            event["payload"]
+        )
