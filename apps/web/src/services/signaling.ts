@@ -1,7 +1,7 @@
 export function createSignalingSocket() {
-  const socket = new WebSocket(
-    "ws://localhost:8000/ws/signaling/"
-  );
+  const host = window.location.hostname;
 
-  return socket;
+  return new WebSocket(
+    `ws://${host}:8000/ws/signaling/`
+  );
 }

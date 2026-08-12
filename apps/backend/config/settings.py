@@ -137,6 +137,8 @@ MAILERS = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://10.0.0.245:5173",
+
 ]
 
 ASGI_APPLICATION = "config.asgi.application"
