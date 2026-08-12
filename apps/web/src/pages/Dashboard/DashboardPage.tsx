@@ -43,29 +43,50 @@ function DashboardPage() {
         JSON.parse(event.data);
 
 
-      if (
-        data.type ===
-        "device_online"
-      ) {
-        setDevices(
-          (currentDevices) =>
-            currentDevices.map(
-              (device) => {
-                if (
-                  device.device_key ===
-                  data.device_id
-                ) {
-                  return {
-                    ...device,
-                    is_active: true,
-                  };
-                }
+      if (data.type === "device_online") {
+  setDevices((currentDevices) => {
+    const existingDevice =
+      currentDevices.find(
+        (device) =>
+          device.device_key === data.device_id
+      );
 
-                return device;
-              }
-            )
-        );
-      }
+    if (existingDevice) {
+      return currentDevices.map(
+        (device) => {
+          if (
+            device.device_key ===
+            data.device_id
+          ) {
+            return {
+              ...device,
+              name: data.device_name,
+              is_active: true,
+            };
+          }
+
+          return device;
+        }
+      );
+    }
+
+    const newDevice: Device = {
+      id: Date.now(),
+      name: data.device_name,
+      device_key: data.device_id,
+      is_active: true,
+      created_at:
+        new Date().toISOString(),
+      last_seen:
+        new Date().toISOString(),
+    };
+
+    return [
+      ...currentDevices,
+      newDevice,
+    ];
+  });
+}
     };
 
 

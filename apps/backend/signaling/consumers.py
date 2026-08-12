@@ -1,4 +1,8 @@
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.utils import timezone
+
+from devices.models import Device
 
 
 class SignalingConsumer(AsyncJsonWebsocketConsumer):
@@ -24,13 +28,20 @@ class SignalingConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def receive_json(self, content):
-        """
-        For the MVP, Django simply relays signaling
-        messages to every connected Sentinel client.
+        message_type = content.get("type")
 
-        React clients decide whether a message
-        is intended for them.
-        """
+        if message_type == "device_online":
+            device = await self.register_or_update_device(
+                device_key=content.get("device_id"),
+                name=content.get(
+                    "device_name",
+                    "Unnamed device",
+                ),
+            )
+
+            content["device_id"] = device["device_key"]
+            content["device_name"] = device["name"]
+            content["is_active"] = True
 
         await self.channel_layer.group_send(
             self.room_name,
@@ -44,3 +55,37 @@ class SignalingConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(
             event["payload"]
         )
+
+    @database_sync_to_async
+    def register_or_update_device(
+        self,
+        device_key,
+        name,
+    ):
+        device, created = Device.objects.get_or_create(
+            device_key=device_key,
+            defaults={
+                "name": name,
+                "is_active": True,
+                "last_seen": timezone.now(),
+            },
+        )
+
+        if not created:
+            device.name = name
+            device.is_active = True
+            device.last_seen = timezone.now()
+
+            device.save(
+                update_fields=[
+                    "name",
+                    "is_active",
+                    "last_seen",
+                ]
+            )
+
+        return {
+            "id": device.id,
+            "device_key": device.device_key,
+            "name": device.name,
+        }

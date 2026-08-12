@@ -6,9 +6,13 @@ import {
 
 import { createSignalingSocket } from "../../services/signaling";
 
+import {
+  getDeviceIdentity,
+  setDeviceName,
+} from "../../services/deviceIdentity";
 
-const DEVICE_ID = "pc-test";
-const DEVICE_NAME = "PC-Test";
+
+const DEVICE = getDeviceIdentity();
 
 
 function EmitterPage() {
@@ -30,11 +34,15 @@ function EmitterPage() {
   const pendingIceCandidatesRef =
     useRef<RTCIceCandidateInit[]>([]);
 
+
   const [cameraActive, setCameraActive] =
     useState(false);
 
   const [connectionStatus, setConnectionStatus] =
     useState("Waiting");
+
+  const [deviceName, setDeviceNameState] =
+    useState(DEVICE.name);
 
 
   useEffect(() => {
@@ -51,8 +59,8 @@ function EmitterPage() {
       socket.send(
         JSON.stringify({
           type: "device_online",
-          device_id: DEVICE_ID,
-          device_name: DEVICE_NAME,
+          device_id: DEVICE.id,
+          device_name: DEVICE.name,
         })
       );
     };
@@ -69,7 +77,7 @@ function EmitterPage() {
 
       if (
         data.type === "watch_device" &&
-        data.target_device_id === DEVICE_ID
+        data.target_device_id === DEVICE.id
       ) {
         await handleWatchRequest(
           data.viewer_id
@@ -79,7 +87,7 @@ function EmitterPage() {
 
       if (
         data.type === "webrtc_answer" &&
-        data.target_device_id === DEVICE_ID
+        data.target_device_id === DEVICE.id
       ) {
         await handleAnswer(
           data.answer
@@ -89,7 +97,7 @@ function EmitterPage() {
 
       if (
         data.type === "ice_candidate" &&
-        data.target_device_id === DEVICE_ID
+        data.target_device_id === DEVICE.id
       ) {
         await handleRemoteIceCandidate(
           data.candidate
@@ -114,6 +122,37 @@ function EmitterPage() {
   }, []);
 
 
+  function saveDeviceName() {
+    const cleanName =
+      deviceName.trim();
+
+    if (!cleanName) {
+      return;
+    }
+
+    setDeviceName(
+      cleanName
+    );
+
+    setDeviceNameState(
+      cleanName
+    );
+
+    socketRef.current?.send(
+      JSON.stringify({
+        type: "device_online",
+        device_id: DEVICE.id,
+        device_name: cleanName,
+      })
+    );
+
+    console.log(
+      "Device renamed:",
+      cleanName
+    );
+  }
+
+
   async function startCamera() {
     try {
       const mediaStream =
@@ -132,13 +171,15 @@ function EmitterPage() {
         videoRef.current.srcObject =
           mediaStream;
       }
-      
+
+
       socketRef.current?.send(
-  JSON.stringify({
-    type: "camera_ready",
-    device_id: DEVICE_ID,
-  })
-);
+        JSON.stringify({
+          type: "camera_ready",
+          device_id: DEVICE.id,
+        })
+      );
+
 
       console.log(
         "Camera started"
@@ -177,13 +218,15 @@ function EmitterPage() {
     peerConnectionRef.current =
       null;
 
+
     socketRef.current?.send(
-    JSON.stringify({
+      JSON.stringify({
         type: "camera_stopped",
-        device_id: DEVICE_ID,
-    })
+        device_id: DEVICE.id,
+      })
     );
-    
+
+
     setConnectionStatus(
       "Camera stopped"
     );
@@ -212,7 +255,7 @@ function EmitterPage() {
         JSON.stringify({
           type: "camera_unavailable",
           target_viewer_id: viewerId,
-          device_id: DEVICE_ID,
+          device_id: DEVICE.id,
         })
       );
 
@@ -260,7 +303,8 @@ function EmitterPage() {
       JSON.stringify({
         type: "webrtc_offer",
 
-        device_id: DEVICE_ID,
+        device_id:
+          DEVICE.id,
 
         target_viewer_id:
           viewerId,
@@ -298,7 +342,7 @@ function EmitterPage() {
             type: "ice_candidate",
 
             device_id:
-              DEVICE_ID,
+              DEVICE.id,
 
             target_viewer_id:
               viewerId,
@@ -395,9 +439,38 @@ function EmitterPage() {
     <main>
       <h1>Emitter</h1>
 
+
+      <div>
+        <label>
+          Device name
+        </label>
+
+        <input
+          value={deviceName}
+          onChange={(event) => {
+            setDeviceNameState(
+              event.target.value
+            );
+          }}
+        />
+
+        <button
+          onClick={saveDeviceName}
+        >
+          Save Name
+        </button>
+      </div>
+
+
       <p>
-        Device: {DEVICE_NAME}
+        Device: {deviceName}
       </p>
+
+
+      <p>
+        Device ID: {DEVICE.id}
+      </p>
+
 
       <p>
         Camera:
@@ -406,6 +479,7 @@ function EmitterPage() {
           ? "🟢 Active"
           : "⚫ Inactive"}
       </p>
+
 
       <p>
         WebRTC:
