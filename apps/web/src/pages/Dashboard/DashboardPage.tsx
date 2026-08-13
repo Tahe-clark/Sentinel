@@ -50,7 +50,24 @@ function DashboardPage() {
         (device) =>
           device.device_key === data.device_id
       );
+        if (data.type === "device_offline") {
+        setDevices((currentDevices) =>
+            currentDevices.map((device) => {
+            if (
+                device.device_key ===
+                data.device_id
+            ) {
+                return {
+                ...device,
+                is_active: false,
+                last_seen: data.last_seen,
+                };
+            }
 
+            return device;
+            })
+        );
+        }
     if (existingDevice) {
       return currentDevices.map(
         (device) => {
@@ -194,6 +211,15 @@ function DashboardPage() {
                     ? "Online"
                     : "Offline"}
                 </p>
+
+                {device.last_seen && (
+                <p>
+                    Last seen:{" "}
+                    {new Date(
+                    device.last_seen
+                    ).toLocaleString()}
+                </p>
+                )}
 
 
                 {device.is_active && (
