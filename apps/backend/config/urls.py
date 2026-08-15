@@ -25,12 +25,12 @@ urlpatterns = [
     ),
 
     path(
-        "api/devices/",
-        include("devices.urls"),
+        "api/auth/",
+        include("accounts.urls"),
     ),
 
     path(
-    "api/auth/",
-    include("accounts.urls"),
-),
+        "api/devices/",
+        include("devices.urls"),
+    ),
 ]

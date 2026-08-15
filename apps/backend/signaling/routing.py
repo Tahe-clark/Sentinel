@@ -5,7 +5,7 @@ from .consumers import SignalingConsumer
 
 websocket_urlpatterns = [
     path(
-        "ws/signaling/",
+        "ws/signaling/<str:role>/",
         SignalingConsumer.as_asgi(),
     ),
 ]

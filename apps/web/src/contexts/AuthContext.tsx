@@ -45,7 +45,6 @@ interface AuthProviderProps {
 export function AuthProvider({
   children,
 }: AuthProviderProps) {
-
   const [user, setUser] =
     useState<User | null>(null);
 
@@ -58,8 +57,19 @@ export function AuthProvider({
       const currentUser =
         await getCurrentUser();
 
+
       setUser(
         currentUser
+      );
+    } catch (error) {
+      console.error(
+        "Unable to refresh user:",
+        error
+      );
+
+
+      setUser(
+        null
       );
     } finally {
       setLoading(
@@ -98,7 +108,9 @@ export function AuthProvider({
 
 export function useAuth() {
   const context =
-    useContext(AuthContext);
+    useContext(
+      AuthContext
+    );
 
 
   if (!context) {

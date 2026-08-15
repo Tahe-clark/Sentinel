@@ -4,6 +4,9 @@ const DEVICE_ID_KEY =
 const DEVICE_NAME_KEY =
   "sentinel_device_name";
 
+const DEVICE_TOKEN_KEY =
+  "sentinel_device_token";
+
 
 export interface DeviceIdentity {
   id: string;
@@ -26,7 +29,8 @@ export function getDeviceIdentity():
 
 
   if (!id) {
-    id = crypto.randomUUID();
+    id =
+      crypto.randomUUID();
 
     localStorage.setItem(
       DEVICE_ID_KEY,
@@ -36,7 +40,8 @@ export function getDeviceIdentity():
 
 
   if (!name) {
-    name = generateDefaultDeviceName();
+    name =
+      generateDefaultDeviceName();
 
     localStorage.setItem(
       DEVICE_NAME_KEY,
@@ -59,6 +64,7 @@ function generateDefaultDeviceName():
     navigator.platform ||
     "Device";
 
+
   return `Sentinel ${platform}`;
 }
 
@@ -69,5 +75,31 @@ export function setDeviceName(
   localStorage.setItem(
     DEVICE_NAME_KEY,
     name
+  );
+}
+
+
+export function getDeviceToken():
+  string | null {
+
+  return localStorage.getItem(
+    DEVICE_TOKEN_KEY
+  );
+}
+
+
+export function setDeviceToken(
+  token: string
+) {
+  localStorage.setItem(
+    DEVICE_TOKEN_KEY,
+    token
+  );
+}
+
+
+export function clearDeviceToken() {
+  localStorage.removeItem(
+    DEVICE_TOKEN_KEY
   );
 }

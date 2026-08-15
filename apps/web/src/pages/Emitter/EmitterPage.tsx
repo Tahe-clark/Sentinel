@@ -10,7 +10,9 @@ import {
 
 import {
   getDeviceIdentity,
+  getDeviceToken,
   setDeviceName,
+  setDeviceToken,
 } from "../../services/deviceIdentity";
 
 import {
@@ -77,7 +79,10 @@ function EmitterPage() {
 
 
     const socket =
-      createSignalingSocket();
+      createSignalingSocket(
+        "emitter"
+      );
+
 
     socketRef.current =
       socket;
@@ -88,12 +93,28 @@ function EmitterPage() {
         "✅ Emitter connected to signaling server"
       );
 
-      socket.send(
-        JSON.stringify({
-          type: "device_online",
-          device_id: DEVICE.id,
-          device_name: DEVICE.name,
-        })
+
+      const deviceToken =
+        getDeviceToken();
+
+
+      if (!deviceToken) {
+        console.log(
+          "ℹ️ Device has no authentication token yet."
+        );
+
+        console.log(
+          "Generate a pairing code to initialize device credentials."
+        );
+
+        return;
+      }
+
+
+      sendDeviceOnline(
+        socket,
+        deviceToken,
+        DEVICE.name
       );
     };
 
@@ -110,9 +131,66 @@ function EmitterPage() {
         );
 
 
-        /*
-         * Viewer asks to watch a device.
-         */
+        if (
+          data.type ===
+          "device_authenticated"
+        ) {
+          console.log(
+            "✅ Device authenticated"
+          );
+
+          console.log(
+            "Paired:",
+            data.paired
+          );
+
+          return;
+        }
+
+
+        if (
+          data.type ===
+          "device_authentication_error"
+        ) {
+          console.error(
+            "❌ Device authentication error:",
+            data.message
+          );
+
+          setConnectionStatus(
+            "Device authentication failed"
+          );
+
+          return;
+        }
+
+
+        if (
+          data.type ===
+          "pairing_completed" &&
+          data.device_id ===
+            DEVICE.id
+        ) {
+          console.log(
+            "✅ Pairing completed"
+          );
+
+          setPairingMessage(
+            "Device paired successfully."
+          );
+
+          setPairingCode(
+            null
+          );
+
+          setPairingExpiresAt(
+            null
+          );
+
+          return;
+        }
+
+
         if (
           data.type ===
           "watch_device"
@@ -147,9 +225,6 @@ function EmitterPage() {
         }
 
 
-        /*
-         * Viewer answered our WebRTC offer.
-         */
         if (
           data.type ===
             "webrtc_answer" &&
@@ -166,9 +241,6 @@ function EmitterPage() {
         }
 
 
-        /*
-         * ICE candidate sent by viewer.
-         */
         if (
           data.type ===
             "ice_candidate" &&
@@ -208,8 +280,10 @@ function EmitterPage() {
     return () => {
       socket.close();
 
+
       peerConnectionRef.current
         ?.close();
+
 
       streamRef.current
         ?.getTracks()
@@ -218,6 +292,46 @@ function EmitterPage() {
         });
     };
   }, []);
+
+
+  function sendDeviceOnline(
+    socket: WebSocket,
+    deviceToken: string,
+    name: string
+  ) {
+    if (
+      socket.readyState !==
+      WebSocket.OPEN
+    ) {
+      console.warn(
+        "Cannot authenticate device: WebSocket is not open."
+      );
+
+      return;
+    }
+
+
+    socket.send(
+      JSON.stringify({
+        type:
+          "device_online",
+
+        device_id:
+          DEVICE.id,
+
+        device_name:
+          name,
+
+        device_token:
+          deviceToken,
+      })
+    );
+
+
+    console.log(
+      "📤 Device authentication sent"
+    );
+  }
 
 
   function saveDeviceName() {
@@ -239,13 +353,26 @@ function EmitterPage() {
     );
 
 
-    socketRef.current?.send(
-      JSON.stringify({
-        type: "device_online",
-        device_id: DEVICE.id,
-        device_name: cleanName,
-      })
-    );
+    const token =
+      getDeviceToken();
+
+
+    const socket =
+      socketRef.current;
+
+
+    if (
+      token &&
+      socket &&
+      socket.readyState ===
+        WebSocket.OPEN
+    ) {
+      sendDeviceOnline(
+        socket,
+        token,
+        cleanName
+      );
+    }
 
 
     console.log(
@@ -269,14 +396,53 @@ function EmitterPage() {
         );
 
 
+      /*
+       * Le backend peut créer le credential
+       * de l'appareil pendant cette requête.
+       */
+      if (
+        result.device_token
+      ) {
+        setDeviceToken(
+          result.device_token
+        );
+
+
+        console.log(
+          "✅ Device authentication token saved"
+        );
+
+
+        const socket =
+          socketRef.current;
+
+
+        if (
+          socket &&
+          socket.readyState ===
+            WebSocket.OPEN
+        ) {
+          sendDeviceOnline(
+            socket,
+            result.device_token,
+            deviceName
+          );
+        }
+      }
+
+
       if (result.paired) {
         setPairingMessage(
           "This device is already paired."
         );
 
-        setPairingCode(null);
+        setPairingCode(
+          null
+        );
 
-        setPairingExpiresAt(null);
+        setPairingExpiresAt(
+          null
+        );
 
         return;
       }
@@ -286,9 +452,11 @@ function EmitterPage() {
         result.code ?? null
       );
 
+
       setPairingExpiresAt(
         result.expires_at ?? null
       );
+
 
       setPairingMessage(
         "Enter this code in your Sentinel dashboard."
@@ -298,6 +466,7 @@ function EmitterPage() {
         "Pairing error:",
         error
       );
+
 
       setPairingMessage(
         error instanceof Error
@@ -316,21 +485,25 @@ function EmitterPage() {
 
 
       const mediaStream =
-        await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        await navigator.mediaDevices
+          .getUserMedia({
+            video: true,
+            audio: false,
+          });
 
 
       streamRef.current =
         mediaStream;
+
 
       setCameraActive(
         true
       );
 
 
-      if (videoRef.current) {
+      if (
+        videoRef.current
+      ) {
         videoRef.current.srcObject =
           mediaStream;
       }
@@ -338,19 +511,17 @@ function EmitterPage() {
 
       socketRef.current?.send(
         JSON.stringify({
-          type: "camera_ready",
-          device_id: DEVICE.id,
+          type:
+            "camera_ready",
+
+          device_id:
+            DEVICE.id,
         })
       );
 
 
       console.log(
         "✅ Camera started"
-      );
-
-      console.log(
-        "Camera tracks:",
-        mediaStream.getTracks()
       );
     } catch (error) {
       console.error(
@@ -372,12 +543,15 @@ function EmitterPage() {
     streamRef.current =
       null;
 
+
     setCameraActive(
       false
     );
 
 
-    if (videoRef.current) {
+    if (
+      videoRef.current
+    ) {
       videoRef.current.srcObject =
         null;
     }
@@ -386,6 +560,7 @@ function EmitterPage() {
     peerConnectionRef.current
       ?.close();
 
+
     peerConnectionRef.current =
       null;
 
@@ -393,14 +568,18 @@ function EmitterPage() {
     currentViewerRef.current =
       null;
 
+
     pendingIceCandidatesRef.current =
       [];
 
 
     socketRef.current?.send(
       JSON.stringify({
-        type: "camera_stopped",
-        device_id: DEVICE.id,
+        type:
+          "camera_stopped",
+
+        device_id:
+          DEVICE.id,
       })
     );
 
@@ -437,7 +616,8 @@ function EmitterPage() {
 
       socketRef.current?.send(
         JSON.stringify({
-          type: "camera_unavailable",
+          type:
+            "camera_unavailable",
 
           target_viewer_id:
             viewerId,
@@ -450,11 +630,6 @@ function EmitterPage() {
 
       return;
     }
-
-
-    console.log(
-      "✅ Camera stream exists"
-    );
 
 
     currentViewerRef.current =
@@ -482,21 +657,11 @@ function EmitterPage() {
     stream
       .getTracks()
       .forEach((track) => {
-        console.log(
-          "Adding track:",
-          track.kind
-        );
-
         peerConnection.addTrack(
           track,
           stream
         );
       });
-
-
-    console.log(
-      "Creating WebRTC offer..."
-    );
 
 
     const offer =
@@ -510,14 +675,10 @@ function EmitterPage() {
       );
 
 
-    console.log(
-      "📤 Sending WebRTC offer"
-    );
-
-
     socketRef.current?.send(
       JSON.stringify({
-        type: "webrtc_offer",
+        type:
+          "webrtc_offer",
 
         device_id:
           DEVICE.id,
@@ -545,11 +706,6 @@ function EmitterPage() {
   function createPeerConnection(
     viewerId: string
   ) {
-    console.log(
-      "Creating emitter RTCPeerConnection"
-    );
-
-
     const peerConnection =
       new RTCPeerConnection({
         iceServers: [
@@ -563,7 +719,9 @@ function EmitterPage() {
 
     peerConnection.onicecandidate =
       (event) => {
-        if (!event.candidate) {
+        if (
+          !event.candidate
+        ) {
           console.log(
             "ICE gathering complete"
           );
@@ -572,15 +730,10 @@ function EmitterPage() {
         }
 
 
-        console.log(
-          "🧊 Emitter ICE candidate:",
-          event.candidate.candidate
-        );
-
-
         socketRef.current?.send(
           JSON.stringify({
-            type: "ice_candidate",
+            type:
+              "ice_candidate",
 
             device_id:
               DEVICE.id,
@@ -659,11 +812,6 @@ function EmitterPage() {
     }
 
 
-    console.log(
-      "Setting remote answer..."
-    );
-
-
     await peerConnection
       .setRemoteDescription(
         answer
@@ -712,15 +860,10 @@ function EmitterPage() {
       !peerConnection
         .remoteDescription
     ) {
-      console.log(
-        "Queueing remote ICE candidate"
-      );
-
-
-      pendingIceCandidatesRef.current.push(
-        candidate
-      );
-
+      pendingIceCandidatesRef.current
+        .push(
+          candidate
+        );
 
       return;
     }
@@ -764,7 +907,9 @@ function EmitterPage() {
 
 
         <input
-          value={deviceName}
+          value={
+            deviceName
+          }
 
           onChange={(event) => {
             setDeviceNameState(
@@ -775,7 +920,9 @@ function EmitterPage() {
 
 
         <button
-          onClick={saveDeviceName}
+          onClick={
+            saveDeviceName
+          }
         >
           Save Name
         </button>
@@ -899,7 +1046,9 @@ function EmitterPage() {
 
         <div>
           <video
-            ref={videoRef}
+            ref={
+              videoRef
+            }
 
             autoPlay
 
@@ -908,9 +1057,14 @@ function EmitterPage() {
             muted
 
             style={{
-              width: "600px",
-              maxWidth: "100%",
-              background: "black",
+              width:
+                "600px",
+
+              maxWidth:
+                "100%",
+
+              background:
+                "black",
             }}
           />
         </div>

@@ -8,6 +8,10 @@ import {
 } from "react-router-dom";
 
 import {
+  useAuth,
+} from "../../contexts/AuthContext";
+
+import {
   createSignalingSocket,
 } from "../../services/signaling";
 
@@ -20,9 +24,12 @@ import type {
 } from "../../types/device";
 
 
-
-
 function DashboardPage() {
+  const {
+    user,
+  } = useAuth();
+
+
   const [devices, setDevices] =
     useState<Device[]>([]);
 
@@ -36,6 +43,7 @@ function DashboardPage() {
   useEffect(() => {
     loadDevices();
 
+
     const socket =
       createSignalingSocket();
 
@@ -45,67 +53,144 @@ function DashboardPage() {
         JSON.parse(event.data);
 
 
-      if (data.type === "device_online") {
-  setDevices((currentDevices) => {
-    const existingDevice =
-      currentDevices.find(
-        (device) =>
-          device.device_key === data.device_id
+      console.log(
+        "Dashboard received:",
+        data
       );
-        if (data.type === "device_offline") {
-        setDevices((currentDevices) =>
-            currentDevices.map((device) => {
-            if (
-                device.device_key ===
-                data.device_id
-            ) {
-                return {
-                ...device,
-                is_active: false,
-                last_seen: data.last_seen,
-                };
+
+
+      if (
+        data.type === "device_online"
+      ) {
+        setDevices(
+          (currentDevices) => {
+            const existingDevice =
+              currentDevices.find(
+                (device) =>
+                  device.device_key ===
+                  data.device_id
+              );
+
+
+            if (existingDevice) {
+              return currentDevices.map(
+                (device) => {
+                  if (
+                    device.device_key ===
+                    data.device_id
+                  ) {
+                    return {
+                      ...device,
+
+                      name:
+                        data.device_name,
+
+                      is_active:
+                        true,
+
+                      last_seen:
+                        data.last_seen ??
+                        device.last_seen,
+                    };
+                  }
+
+
+                  return device;
+                }
+              );
             }
 
-            return device;
-            })
-        );
-        }
-    if (existingDevice) {
-      return currentDevices.map(
-        (device) => {
-          if (
-            device.device_key ===
-            data.device_id
-          ) {
-            return {
-              ...device,
-              name: data.device_name,
-              is_active: true,
+
+            /*
+             * Normalement l'API contient déjà
+             * tous les appareils de l'utilisateur.
+             *
+             * Mais si un appareil vient d'être pairé
+             * pendant que le dashboard est ouvert,
+             * on peut l'ajouter immédiatement.
+             */
+            const newDevice: Device = {
+              id:
+                data.id ??
+                Date.now(),
+
+              name:
+                data.device_name,
+
+              device_key:
+                data.device_id,
+
+              is_active:
+                true,
+
+              created_at:
+                new Date().toISOString(),
+
+              last_seen:
+                data.last_seen ??
+                new Date().toISOString(),
+
+              is_paired:
+                true,
             };
+
+
+            return [
+              ...currentDevices,
+              newDevice,
+            ];
           }
+        );
+      }
 
-          return device;
-        }
-      );
-    }
 
-    const newDevice: Device = {
-      id: Date.now(),
-      name: data.device_name,
-      device_key: data.device_id,
-      is_active: true,
-      created_at:
-        new Date().toISOString(),
-      last_seen:
-        new Date().toISOString(),
+      if (
+        data.type === "device_offline"
+      ) {
+        setDevices(
+          (currentDevices) =>
+            currentDevices.map(
+              (device) => {
+                if (
+                  device.device_key ===
+                  data.device_id
+                ) {
+                  return {
+                    ...device,
+
+                    is_active:
+                      false,
+
+                    last_seen:
+                      data.last_seen,
+                  };
+                }
+
+
+                return device;
+              }
+            )
+        );
+      }
+
+
+      if (
+        data.type ===
+        "authorization_error"
+      ) {
+        console.error(
+          "Authorization error:",
+          data.message
+        );
+      }
     };
 
-    return [
-      ...currentDevices,
-      newDevice,
-    ];
-  });
-}
+
+    socket.onerror = (error) => {
+      console.error(
+        "Dashboard WebSocket error:",
+        error
+      );
     };
 
 
@@ -119,18 +204,29 @@ function DashboardPage() {
     try {
       setLoading(true);
 
+      setError(null);
+
+
       const result =
         await getDevices();
 
-      setDevices(result);
+
+      setDevices(
+        result
+      );
     } catch (err) {
-      console.error(err);
+      console.error(
+        err
+      );
+
 
       setError(
         "Unable to load devices."
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false
+      );
     }
   }
 
@@ -141,6 +237,18 @@ function DashboardPage() {
         <h1>
           Sentinel Dashboard
         </h1>
+
+
+        {user && (
+          <p>
+            Signed in as:
+            {" "}
+            <strong>
+              {user.username}
+            </strong>
+          </p>
+        )}
+
 
         <p>
           Loading devices...
@@ -157,6 +265,18 @@ function DashboardPage() {
           Sentinel Dashboard
         </h1>
 
+
+        {user && (
+          <p>
+            Signed in as:
+            {" "}
+            <strong>
+              {user.username}
+            </strong>
+          </p>
+        )}
+
+
         <p>
           {error}
         </p>
@@ -170,9 +290,36 @@ function DashboardPage() {
       <h1>
         Sentinel Dashboard
       </h1>
-        <Link to="/pair-device">
-  + Add Device
-</Link>
+
+
+      {user && (
+        <section>
+          <p>
+            Signed in as:
+            {" "}
+            <strong>
+              {user.username}
+            </strong>
+          </p>
+
+
+          {user.email && (
+            <p>
+              {user.email}
+            </p>
+          )}
+        </section>
+      )}
+
+
+      <p>
+        <Link
+          to="/pair-device"
+        >
+          + Add Device
+        </Link>
+      </p>
+
 
       <h2>
         My Devices
@@ -187,8 +334,10 @@ function DashboardPage() {
         <div>
           {devices.map(
             (device) => (
-              <div
-                key={device.id}
+              <article
+                key={
+                  device.id
+                }
               >
                 <h3>
                   {device.is_active
@@ -216,26 +365,31 @@ function DashboardPage() {
                     : "Offline"}
                 </p>
 
+
                 {device.last_seen && (
-                <p>
-                    Last seen:{" "}
+                  <p>
+                    Last seen:
+                    {" "}
+
                     {new Date(
-                    device.last_seen
+                      device.last_seen
                     ).toLocaleString()}
-                </p>
+                  </p>
                 )}
 
 
                 {device.is_active && (
-                  <Link
-                    to={
-                      `/device/${device.device_key}`
-                    }
-                  >
-                    View Camera
-                  </Link>
+                  <p>
+                    <Link
+                      to={
+                        `/device/${device.device_key}`
+                      }
+                    >
+                      View Camera
+                    </Link>
+                  </p>
                 )}
-              </div>
+              </article>
             )
           )}
         </div>

@@ -1,14 +1,15 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
+
 
 class Device(models.Model):
     owner = models.ForeignKey(
-    settings.AUTH_USER_MODEL,
-    on_delete=models.CASCADE,
-    related_name="devices",
-    null=True,
-    blank=True,
-)
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="devices",
+        null=True,
+        blank=True,
+    )
 
     name = models.CharField(
         max_length=100
@@ -17,6 +18,12 @@ class Device(models.Model):
     device_key = models.CharField(
         max_length=100,
         unique=True
+    )
+
+    auth_token_hash = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
     )
 
     created_at = models.DateTimeField(

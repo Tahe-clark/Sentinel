@@ -1,6 +1,11 @@
 import secrets
 from datetime import timedelta
 
+from asgiref.sync import async_to_sync
+
+from channels.layers import get_channel_layer
+
+from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
 from rest_framework import status
@@ -68,21 +73,43 @@ class CreatePairingRequestView(APIView):
 
         device.name = device_name
 
+
+        # Les anciens appareils créés avant cette étape
+        # n'ont encore aucun secret.
+        device_token = None
+
+        if not device.auth_token_hash:
+            device_token = (
+                secrets.token_urlsafe(32)
+            )
+
+            device.auth_token_hash = (
+                make_password(
+                    device_token
+                )
+            )
+
+
         device.save(
             update_fields=[
                 "name",
+                "auth_token_hash",
             ]
         )
 
 
         if device.is_paired:
-            return Response(
-                {
-                    "paired": True,
-                    "message":
-                        "Device is already paired.",
-                }
-            )
+            return Response({
+                "paired": True,
+
+                "message":
+                    "Device is already paired.",
+
+                # Présent uniquement si nous venons
+                # de créer le secret.
+                "device_token":
+                    device_token,
+            })
 
 
         PairingRequest.objects.filter(
@@ -110,9 +137,14 @@ class CreatePairingRequestView(APIView):
         return Response(
             {
                 "paired": False,
+
                 "code": code,
+
                 "expires_at":
                     expires_at.isoformat(),
+
+                "device_token":
+                    device_token,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -121,14 +153,20 @@ class CreatePairingRequestView(APIView):
     def generate_unique_code(self):
         while True:
             code = str(
-                secrets.randbelow(900000)
+                secrets.randbelow(
+                    900000
+                )
                 + 100000
             )
 
-            exists = PairingRequest.objects.filter(
-                code=code,
-                claimed=False,
-            ).exists()
+            exists = (
+                PairingRequest.objects
+                .filter(
+                    code=code,
+                    claimed=False,
+                )
+                .exists()
+            )
 
             if not exists:
                 return code
@@ -195,14 +233,6 @@ class ClaimPairingRequestView(APIView):
         device = pairing_request.device
 
 
-        # TEMPORAIRE : utile pour vérifier quel utilisateur
-        # est réellement connecté au moment du pairing.
-        print(
-            "PAIRING USER:",
-            request.user.username
-        )
-
-
         device.owner = request.user
         device.is_paired = True
 
@@ -223,17 +253,42 @@ class ClaimPairingRequestView(APIView):
         )
 
 
+        # L'émetteur attend dans son groupe privé
+        # device.<UUID>.
+        #
+        # On lui annonce maintenant quel utilisateur
+        # possède l'appareil.
+        channel_layer = (
+            get_channel_layer()
+        )
+
+
+        async_to_sync(
+            channel_layer.group_send
+        )(
+            f"device.{device.device_key}",
+            {
+                "type":
+                    "pairing.completed",
+
+                "device_key":
+                    device.device_key,
+
+                "owner_id":
+                    request.user.id,
+            },
+        )
+
+
         serializer = DeviceSerializer(
             device
         )
 
 
-        return Response(
-            {
-                "message":
-                    "Device paired successfully.",
+        return Response({
+            "message":
+                "Device paired successfully.",
 
-                "device":
-                    serializer.data,
-            }
-        )
+            "device":
+                serializer.data,
+        })
