@@ -10,12 +10,17 @@ import HomePage from "./pages/Home/Homepages";
 import DashboardPage from "./pages/Dashboard/DashboardPage";
 import EmitterPage from "./pages/Emitter/EmitterPage";
 import DevicePage from "./pages/Device/DevicePage";
+import PairDevicePage from "./pages/PairDevice/PairDevicePage";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<MainLayout />}>
+        <Route
+  path="/pair-device"
+  element={<PairDevicePage />}
+/>
           <Route path="/" element={<HomePage />} />
 
           <Route

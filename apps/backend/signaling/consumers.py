@@ -74,6 +74,26 @@ class SignalingConsumer(AsyncJsonWebsocketConsumer):
             # On associe CE WebSocket à CET appareil.
             self.device_key = device["device_key"]
 
+            content["device_id"] = (
+        device["device_key"]
+            )
+
+            content["device_name"] = (
+                device["name"]
+            )
+
+            content["is_active"] = True
+
+            content["last_seen"] = (
+                device["last_seen"]
+                )
+
+
+            if not device["is_paired"]:
+                return
+            
+            await self.channel_layer.group_send(...)
+            
             content["device_id"] = device["device_key"]
             content["device_name"] = device["name"]
             content["is_active"] = True
@@ -129,6 +149,7 @@ class SignalingConsumer(AsyncJsonWebsocketConsumer):
             "device_key": device.device_key,
             "name": device.name,
             "last_seen": device.last_seen.isoformat(),
+            "is_paired": device.is_paired,
         }
 
 

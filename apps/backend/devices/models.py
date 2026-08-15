@@ -24,5 +24,35 @@ class Device(models.Model):
         default=False
     )
 
+    is_paired = models.BooleanField(
+        default=False
+    )
+
     def __str__(self):
         return self.name
+
+
+class PairingRequest(models.Model):
+    device = models.ForeignKey(
+        Device,
+        on_delete=models.CASCADE,
+        related_name="pairing_requests",
+    )
+
+    code = models.CharField(
+        max_length=6,
+        unique=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    expires_at = models.DateTimeField()
+
+    claimed = models.BooleanField(
+        default=False
+    )
+
+    def __str__(self):
+        return f"{self.device.name} - {self.code}"

@@ -20,6 +20,8 @@ import type {
 } from "../../types/device";
 
 
+
+
 function DashboardPage() {
   const [devices, setDevices] =
     useState<Device[]>([]);
@@ -168,7 +170,9 @@ function DashboardPage() {
       <h1>
         Sentinel Dashboard
       </h1>
-
+        <Link to="/pair-device">
+  + Add Device
+</Link>
 
       <h2>
         My Devices

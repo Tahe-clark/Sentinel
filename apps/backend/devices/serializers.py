@@ -16,4 +16,5 @@ class DeviceSerializer(
             "created_at",
             "last_seen",
             "is_active",
+            "is_paired",
         ]

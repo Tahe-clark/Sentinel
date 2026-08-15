@@ -4,12 +4,18 @@ import {
   useState,
 } from "react";
 
-import { createSignalingSocket } from "../../services/signaling";
+import {
+  createSignalingSocket,
+} from "../../services/signaling";
 
 import {
   getDeviceIdentity,
   setDeviceName,
 } from "../../services/deviceIdentity";
+
+import {
+  requestPairing,
+} from "../../services/pairing";
 
 
 const DEVICE = getDeviceIdentity();
@@ -44,11 +50,26 @@ function EmitterPage() {
   const [deviceName, setDeviceNameState] =
     useState(DEVICE.name);
 
+  const [pairingCode, setPairingCode] =
+    useState<string | null>(null);
+
+  const [
+    pairingExpiresAt,
+    setPairingExpiresAt,
+  ] = useState<string | null>(null);
+
+  const [
+    pairingMessage,
+    setPairingMessage,
+  ] = useState("");
+
 
   useEffect(() => {
-    const socket = createSignalingSocket();
+    const socket =
+      createSignalingSocket();
 
-    socketRef.current = socket;
+    socketRef.current =
+      socket;
 
 
     socket.onopen = () => {
@@ -66,44 +87,46 @@ function EmitterPage() {
     };
 
 
-    socket.onmessage = async (event) => {
-      const data = JSON.parse(event.data);
+    socket.onmessage =
+      async (event) => {
+        const data =
+          JSON.parse(event.data);
 
-      console.log(
-        "Emitter received:",
-        data
-      );
-
-
-      if (
-        data.type === "watch_device" &&
-        data.target_device_id === DEVICE.id
-      ) {
-        await handleWatchRequest(
-          data.viewer_id
+        console.log(
+          "Emitter received:",
+          data
         );
-      }
 
 
-      if (
-        data.type === "webrtc_answer" &&
-        data.target_device_id === DEVICE.id
-      ) {
-        await handleAnswer(
-          data.answer
-        );
-      }
+        if (
+          data.type === "watch_device" &&
+          data.target_device_id === DEVICE.id
+        ) {
+          await handleWatchRequest(
+            data.viewer_id
+          );
+        }
 
 
-      if (
-        data.type === "ice_candidate" &&
-        data.target_device_id === DEVICE.id
-      ) {
-        await handleRemoteIceCandidate(
-          data.candidate
-        );
-      }
-    };
+        if (
+          data.type === "webrtc_answer" &&
+          data.target_device_id === DEVICE.id
+        ) {
+          await handleAnswer(
+            data.answer
+          );
+        }
+
+
+        if (
+          data.type === "ice_candidate" &&
+          data.target_device_id === DEVICE.id
+        ) {
+          await handleRemoteIceCandidate(
+            data.candidate
+          );
+        }
+      };
 
 
     socket.onerror = (error) => {
@@ -114,10 +137,28 @@ function EmitterPage() {
     };
 
 
+    socket.onclose = () => {
+      console.log(
+        "Emitter disconnected from signaling server"
+      );
+
+      setConnectionStatus(
+        "Signaling disconnected"
+      );
+    };
+
+
     return () => {
       socket.close();
 
-      peerConnectionRef.current?.close();
+      peerConnectionRef.current
+        ?.close();
+
+      streamRef.current
+        ?.getTracks()
+        .forEach((track) => {
+          track.stop();
+        });
     };
   }, []);
 
@@ -130,6 +171,7 @@ function EmitterPage() {
       return;
     }
 
+
     setDeviceName(
       cleanName
     );
@@ -137,6 +179,7 @@ function EmitterPage() {
     setDeviceNameState(
       cleanName
     );
+
 
     socketRef.current?.send(
       JSON.stringify({
@@ -146,10 +189,68 @@ function EmitterPage() {
       })
     );
 
+
     console.log(
       "Device renamed:",
       cleanName
     );
+  }
+
+
+  async function createPairingCode() {
+    try {
+      setPairingMessage(
+        "Generating pairing code..."
+      );
+
+
+      const result =
+        await requestPairing(
+          DEVICE.id,
+          deviceName,
+        );
+
+
+      if (result.paired) {
+        setPairingMessage(
+          "This device is already paired."
+        );
+
+        setPairingCode(
+          null
+        );
+
+        setPairingExpiresAt(
+          null
+        );
+
+        return;
+      }
+
+
+      setPairingCode(
+        result.code ?? null
+      );
+
+      setPairingExpiresAt(
+        result.expires_at ?? null
+      );
+
+      setPairingMessage(
+        "Enter this code in your Sentinel dashboard."
+      );
+    } catch (error) {
+      console.error(
+        "Pairing error:",
+        error
+      );
+
+      setPairingMessage(
+        error instanceof Error
+          ? error.message
+          : "Pairing failed."
+      );
+    }
   }
 
 
@@ -161,10 +262,13 @@ function EmitterPage() {
           audio: false,
         });
 
+
       streamRef.current =
         mediaStream;
 
-      setCameraActive(true);
+      setCameraActive(
+        true
+      );
 
 
       if (videoRef.current) {
@@ -201,9 +305,12 @@ function EmitterPage() {
       });
 
 
-    streamRef.current = null;
+    streamRef.current =
+      null;
 
-    setCameraActive(false);
+    setCameraActive(
+      false
+    );
 
 
     if (videoRef.current) {
@@ -217,6 +324,13 @@ function EmitterPage() {
 
     peerConnectionRef.current =
       null;
+
+
+    currentViewerRef.current =
+      null;
+
+    pendingIceCandidatesRef.current =
+      [];
 
 
     socketRef.current?.send(
@@ -251,13 +365,17 @@ function EmitterPage() {
         "Camera is not active"
       );
 
+
       socketRef.current?.send(
         JSON.stringify({
           type: "camera_unavailable",
-          target_viewer_id: viewerId,
-          device_id: DEVICE.id,
+          target_viewer_id:
+            viewerId,
+          device_id:
+            DEVICE.id,
         })
       );
+
 
       return;
     }
@@ -269,6 +387,10 @@ function EmitterPage() {
 
     peerConnectionRef.current
       ?.close();
+
+
+    pendingIceCandidatesRef.current =
+      [];
 
 
     const peerConnection =
@@ -292,11 +414,14 @@ function EmitterPage() {
 
 
     const offer =
-      await peerConnection.createOffer();
+      await peerConnection
+        .createOffer();
 
 
     await peerConnection
-      .setLocalDescription(offer);
+      .setLocalDescription(
+        offer
+      );
 
 
     socketRef.current?.send(
@@ -365,6 +490,17 @@ function EmitterPage() {
         setConnectionStatus(
           peerConnection.connectionState
         );
+
+
+        if (
+          peerConnection.connectionState ===
+            "failed" ||
+          peerConnection.connectionState ===
+            "closed"
+        ) {
+          currentViewerRef.current =
+            null;
+        }
       };
 
 
@@ -373,7 +509,8 @@ function EmitterPage() {
 
 
   async function handleAnswer(
-    answer: RTCSessionDescriptionInit
+    answer:
+      RTCSessionDescriptionInit
   ) {
     const peerConnection =
       peerConnectionRef.current;
@@ -385,7 +522,9 @@ function EmitterPage() {
 
 
     await peerConnection
-      .setRemoteDescription(answer);
+      .setRemoteDescription(
+        answer
+      );
 
 
     console.log(
@@ -398,7 +537,9 @@ function EmitterPage() {
       of pendingIceCandidatesRef.current
     ) {
       await peerConnection
-        .addIceCandidate(candidate);
+        .addIceCandidate(
+          candidate
+        );
     }
 
 
@@ -408,7 +549,8 @@ function EmitterPage() {
 
 
   async function handleRemoteIceCandidate(
-    candidate: RTCIceCandidateInit
+    candidate:
+      RTCIceCandidateInit
   ) {
     const peerConnection =
       peerConnectionRef.current;
@@ -420,7 +562,8 @@ function EmitterPage() {
 
 
     if (
-      !peerConnection.remoteDescription
+      !peerConnection
+        .remoteDescription
     ) {
       pendingIceCandidatesRef.current.push(
         candidate
@@ -431,16 +574,31 @@ function EmitterPage() {
 
 
     await peerConnection
-      .addIceCandidate(candidate);
+      .addIceCandidate(
+        candidate
+      );
   }
 
 
   return (
     <main>
-      <h1>Emitter</h1>
+      <h1>
+        Emitter
+      </h1>
 
 
-      <div>
+      <section>
+        <h2>
+          Device
+        </h2>
+
+        <p>
+          Device ID:
+          {" "}
+          {DEVICE.id}
+        </p>
+
+
         <label>
           Device name
         </label>
@@ -459,63 +617,134 @@ function EmitterPage() {
         >
           Save Name
         </button>
-      </div>
 
 
-      <p>
-        Device: {deviceName}
-      </p>
+        <p>
+          Current name:
+          {" "}
+          {deviceName}
+        </p>
+      </section>
 
 
-      <p>
-        Device ID: {DEVICE.id}
-      </p>
+      <hr />
 
 
-      <p>
-        Camera:
-        {" "}
-        {cameraActive
-          ? "🟢 Active"
-          : "⚫ Inactive"}
-      </p>
+      <section>
+        <h2>
+          Device Pairing
+        </h2>
 
 
-      <p>
-        WebRTC:
-        {" "}
-        {connectionStatus}
-      </p>
+        <button
+          onClick={
+            createPairingCode
+          }
+        >
+          Pair this device
+        </button>
 
 
-      <button
-        onClick={startCamera}
-        disabled={cameraActive}
-      >
-        Start Camera
-      </button>
+        {pairingCode && (
+          <div>
+            <h3>
+              Pairing Code
+            </h3>
+
+            <strong>
+              {pairingCode}
+            </strong>
+
+            <p>
+              {pairingMessage}
+            </p>
+
+            {pairingExpiresAt && (
+              <p>
+                Expires:
+                {" "}
+                {new Date(
+                  pairingExpiresAt
+                ).toLocaleTimeString()}
+              </p>
+            )}
+          </div>
+        )}
 
 
-      <button
-        onClick={stopCamera}
-        disabled={!cameraActive}
-      >
-        Stop Camera
-      </button>
+        {!pairingCode &&
+          pairingMessage && (
+            <p>
+              {pairingMessage}
+            </p>
+          )}
+      </section>
 
 
-      <div>
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{
-            width: "600px",
-            maxWidth: "100%",
-          }}
-        />
-      </div>
+      <hr />
+
+
+      <section>
+        <h2>
+          Camera
+        </h2>
+
+
+        <p>
+          Camera:
+          {" "}
+          {cameraActive
+            ? "🟢 Active"
+            : "⚫ Inactive"}
+        </p>
+
+
+        <p>
+          WebRTC:
+          {" "}
+          {connectionStatus}
+        </p>
+
+
+        <button
+          onClick={
+            startCamera
+          }
+          disabled={
+            cameraActive
+          }
+        >
+          Start Camera
+        </button>
+
+
+        <button
+          onClick={
+            stopCamera
+          }
+          disabled={
+            !cameraActive
+          }
+        >
+          Stop Camera
+        </button>
+
+
+        <div>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: "600px",
+              maxWidth: "100%",
+              background:
+                "black",
+            }}
+          />
+        </div>
+      </section>
     </main>
   );
 }
