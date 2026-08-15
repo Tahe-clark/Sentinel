@@ -14,44 +14,62 @@ import {
 
 
 function DevicePage() {
-  const { deviceId } =
-    useParams();
+  const {
+    deviceId,
+  } = useParams();
 
 
   const videoRef =
     useRef<HTMLVideoElement>(null);
 
-
   const socketRef =
     useRef<WebSocket | null>(null);
-
 
   const peerConnectionRef =
     useRef<RTCPeerConnection | null>(
       null
     );
 
-
   const viewerIdRef =
     useRef(
       crypto.randomUUID()
     );
 
-
   const pendingIceCandidatesRef =
-    useRef<RTCIceCandidateInit[]>(
-      []
-    );
+    useRef<
+      RTCIceCandidateInit[]
+    >([]);
 
 
   const [status, setStatus] =
-    useState("Connecting...");
+    useState(
+      "Connecting to signaling..."
+    );
 
 
   useEffect(() => {
     if (!deviceId) {
+      console.error(
+        "❌ No device ID in URL"
+      );
+
+      setStatus(
+        "Invalid device"
+      );
+
       return;
     }
+
+
+    console.log(
+      "VIEWER ID:",
+      viewerIdRef.current
+    );
+
+    console.log(
+      "VIEWER TARGET DEVICE:",
+      deviceId
+    );
 
 
     const socket =
@@ -63,12 +81,13 @@ function DevicePage() {
 
 
     socket.onopen = () => {
-  console.log(
-    "Viewer connected to signaling"
-  );
+      console.log(
+        "✅ Viewer connected to signaling"
+      );
 
-  requestCamera();
-};
+
+      requestCamera();
+    };
 
 
     socket.onmessage =
@@ -78,18 +97,37 @@ function DevicePage() {
 
 
         console.log(
-          "Viewer received:",
+          "📩 VIEWER RECEIVED:",
           data
         );
 
 
         if (
           data.type ===
-            "webrtc_offer" &&
+            "camera_ready" &&
+          data.device_id ===
+            deviceId
+        ) {
+          console.log(
+            "📷 Camera became ready"
+          );
 
+
+          requestCamera();
+        }
+
+
+        if (
+          data.type ===
+            "webrtc_offer" &&
           data.target_viewer_id ===
             viewerIdRef.current
         ) {
+          console.log(
+            "✅ WebRTC offer received"
+          );
+
+
           await handleOffer(
             data.offer
           );
@@ -99,66 +137,79 @@ function DevicePage() {
         if (
           data.type ===
             "ice_candidate" &&
-
           data.target_viewer_id ===
             viewerIdRef.current
         ) {
+          console.log(
+            "🧊 Viewer received remote ICE candidate"
+          );
+
+
           await handleRemoteIceCandidate(
             data.candidate
           );
         }
-        
-        if (
-        data.type === "camera_ready" &&
-        data.device_id === deviceId
-        ) {
-        console.log(
-            "Camera became available"
-        );
 
-          requestCamera();
-        }
 
         if (
           data.type ===
             "camera_unavailable" &&
-
           data.target_viewer_id ===
             viewerIdRef.current
         ) {
+          console.log(
+            "⚠️ Camera unavailable"
+          );
+
+
           setStatus(
-            "Camera is not active"
+            "Waiting for camera..."
           );
         }
 
+
         if (
-            data.type === "camera_stopped" &&
-            data.device_id === deviceId
-            ) {
-            setStatus(
-                "Camera stopped"
-            );
+          data.type ===
+            "camera_stopped" &&
+          data.device_id ===
+            deviceId
+        ) {
+          console.log(
+            "🛑 Remote camera stopped"
+          );
 
-            peerConnectionRef.current
-                ?.close();
 
-            peerConnectionRef.current =
-                null;
+          peerConnectionRef.current
+            ?.close();
 
-            if (videoRef.current) {
-                videoRef.current.srcObject =
-                null;
-            }
-            }
+
+          peerConnectionRef.current =
+            null;
+
+
+          pendingIceCandidatesRef.current =
+            [];
+
+
+          if (
+            videoRef.current
+          ) {
+            videoRef.current.srcObject =
+              null;
+          }
+
+
+          setStatus(
+            "Camera stopped"
+          );
+        }
       };
-
-      
 
 
     socket.onerror =
       (error) => {
         console.error(
-          "Viewer socket error:",
+          "❌ Viewer WebSocket error:",
           error
         );
 
@@ -169,74 +220,139 @@ function DevicePage() {
       };
 
 
+    socket.onclose =
+      () => {
+        console.log(
+          "🔌 Viewer signaling disconnected"
+        );
+      };
+
+
     return () => {
       socket.close();
+
 
       peerConnectionRef.current
         ?.close();
     };
   }, [deviceId]);
 
+
   function requestCamera() {
-  const socket =
-    socketRef.current;
+    const socket =
+      socketRef.current;
 
-  if (
-    !socket ||
-    socket.readyState !== WebSocket.OPEN ||
-    !deviceId
-  ) {
-    return;
+
+    if (!deviceId) {
+      console.error(
+        "Cannot request camera: no device ID"
+      );
+
+      return;
+    }
+
+
+    if (!socket) {
+      console.error(
+        "Cannot request camera: no WebSocket"
+      );
+
+      return;
+    }
+
+
+    if (
+      socket.readyState !==
+      WebSocket.OPEN
+    ) {
+      console.error(
+        "Cannot request camera: WebSocket not open"
+      );
+
+      return;
+    }
+
+
+    const peerConnection =
+      peerConnectionRef.current;
+
+
+    if (
+      peerConnection &&
+      (
+        peerConnection.connectionState ===
+          "connected" ||
+        peerConnection.connectionState ===
+          "connecting"
+      )
+    ) {
+      console.log(
+        "WebRTC already connected/connecting"
+      );
+
+      return;
+    }
+
+
+    console.log(
+      "📤 VIEWER REQUESTING DEVICE:",
+      deviceId
+    );
+
+
+    console.log(
+      "Viewer ID:",
+      viewerIdRef.current
+    );
+
+
+    socket.send(
+      JSON.stringify({
+        type:
+          "watch_device",
+
+        viewer_id:
+          viewerIdRef.current,
+
+        target_device_id:
+          deviceId,
+      })
+    );
+
+
+    setStatus(
+      "Requesting camera..."
+    );
   }
 
-  const peerConnection =
-    peerConnectionRef.current;
-
-  if (
-    peerConnection &&
-    (
-      peerConnection.connectionState ===
-        "connected" ||
-      peerConnection.connectionState ===
-        "connecting"
-    )
-  ) {
-    return;
-  }
-
-  console.log(
-    "Requesting camera:",
-    deviceId
-  );
-
-  socket.send(
-    JSON.stringify({
-      type: "watch_device",
-
-      viewer_id:
-        viewerIdRef.current,
-
-      target_device_id:
-        deviceId,
-    })
-  );
-
-  setStatus(
-    "Requesting camera..."
-  );
- }
 
   function createPeerConnection() {
+    console.log(
+      "Creating viewer RTCPeerConnection"
+    );
+
+
     const peerConnection =
       new RTCPeerConnection({
-        iceServers: [],
+        iceServers: [
+          {
+            urls:
+              "stun:stun.l.google.com:19302",
+          },
+        ],
       });
 
 
     peerConnection.ontrack =
       (event) => {
         console.log(
-          "Remote video received"
+          "🎥 REMOTE VIDEO RECEIVED"
+        );
+
+
+        console.log(
+          "Track:",
+          event.track
         );
 
 
@@ -250,6 +366,16 @@ function DevicePage() {
         ) {
           videoRef.current.srcObject =
             remoteStream;
+
+
+          videoRef.current
+            .play()
+            .catch((error) => {
+              console.warn(
+                "Video autoplay issue:",
+                error
+              );
+            });
         }
       };
 
@@ -257,8 +383,18 @@ function DevicePage() {
     peerConnection.onicecandidate =
       (event) => {
         if (!event.candidate) {
+          console.log(
+            "Viewer ICE gathering complete"
+          );
+
           return;
         }
+
+
+        console.log(
+          "🧊 Viewer ICE candidate:",
+          event.candidate.candidate
+        );
 
 
         socketRef.current?.send(
@@ -282,7 +418,7 @@ function DevicePage() {
     peerConnection.onconnectionstatechange =
       () => {
         console.log(
-          "Viewer WebRTC:",
+          "🔗 VIEWER WebRTC state:",
           peerConnection.connectionState
         );
 
@@ -293,20 +429,43 @@ function DevicePage() {
       };
 
 
+    peerConnection.oniceconnectionstatechange =
+      () => {
+        console.log(
+          "🧊 Viewer ICE state:",
+          peerConnection.iceConnectionState
+        );
+      };
+
+
+    peerConnection.onicegatheringstatechange =
+      () => {
+        console.log(
+          "🧊 Viewer ICE gathering:",
+          peerConnection.iceGatheringState
+        );
+      };
+
+
     return peerConnection;
   }
 
 
   async function handleOffer(
-    offer: RTCSessionDescriptionInit
+    offer:
+      RTCSessionDescriptionInit
   ) {
     console.log(
-      "WebRTC offer received"
+      "Handling WebRTC offer..."
     );
 
 
     peerConnectionRef.current
       ?.close();
+
+
+    pendingIceCandidatesRef.current =
+      [];
 
 
     const peerConnection =
@@ -317,8 +476,20 @@ function DevicePage() {
       peerConnection;
 
 
+    console.log(
+      "Setting remote offer..."
+    );
+
+
     await peerConnection
-      .setRemoteDescription(offer);
+      .setRemoteDescription(
+        offer
+      );
+
+
+    console.log(
+      "✅ Remote offer accepted"
+    );
 
 
     for (
@@ -326,12 +497,19 @@ function DevicePage() {
       of pendingIceCandidatesRef.current
     ) {
       await peerConnection
-        .addIceCandidate(candidate);
+        .addIceCandidate(
+          candidate
+        );
     }
 
 
     pendingIceCandidatesRef.current =
       [];
+
+
+    console.log(
+      "Creating WebRTC answer..."
+    );
 
 
     const answer =
@@ -340,7 +518,14 @@ function DevicePage() {
 
 
     await peerConnection
-      .setLocalDescription(answer);
+      .setLocalDescription(
+        answer
+      );
+
+
+    console.log(
+      "📤 Sending WebRTC answer"
+    );
 
 
     socketRef.current?.send(
@@ -363,11 +548,17 @@ function DevicePage() {
     setStatus(
       "Answer sent"
     );
+
+
+    console.log(
+      "✅ ANSWER SENT"
+    );
   }
 
 
   async function handleRemoteIceCandidate(
-    candidate: RTCIceCandidateInit
+    candidate:
+      RTCIceCandidateInit
   ) {
     const peerConnection =
       peerConnectionRef.current;
@@ -377,16 +568,29 @@ function DevicePage() {
       !peerConnection ||
       !peerConnection.remoteDescription
     ) {
+      console.log(
+        "Queueing ICE candidate"
+      );
+
+
       pendingIceCandidatesRef.current.push(
         candidate
       );
+
 
       return;
     }
 
 
     await peerConnection
-      .addIceCandidate(candidate);
+      .addIceCandidate(
+        candidate
+      );
+
+
+    console.log(
+      "✅ Viewer added remote ICE candidate"
+    );
   }
 
 
@@ -405,22 +609,46 @@ function DevicePage() {
 
 
       <p>
+        Viewer ID:
+        {" "}
+        {viewerIdRef.current}
+      </p>
+
+
+      <p>
         Status:
         {" "}
         {status}
       </p>
 
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        style={{
-          width: "700px",
-          maxWidth: "100%",
-          background: "black",
-        }}
-      />
+      <button
+        onClick={
+          requestCamera
+        }
+      >
+        Retry Camera
+      </button>
+
+
+      <div>
+        <video
+          ref={videoRef}
+
+          autoPlay
+
+          playsInline
+
+          controls
+
+          style={{
+            width: "700px",
+            maxWidth: "100%",
+            minHeight: "300px",
+            background: "black",
+          }}
+        />
+      </div>
     </main>
   );
 }

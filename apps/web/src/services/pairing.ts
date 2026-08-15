@@ -1,3 +1,8 @@
+import {
+  getCsrfToken,
+} from "./auth";
+
+
 function getApiBaseUrl() {
   const host =
     window.location.hostname;
@@ -14,10 +19,38 @@ export interface PairingRequestResponse {
 }
 
 
+async function readResponse(
+  response: Response
+) {
+  const contentType =
+    response.headers.get(
+      "content-type"
+    );
+
+  if (
+    contentType?.includes(
+      "application/json"
+    )
+  ) {
+    return response.json();
+  }
+
+  const text =
+    await response.text();
+
+  throw new Error(
+    `Server returned ${response.status}: ${text.slice(0, 250)}`
+  );
+}
+
+
 export async function requestPairing(
   deviceId: string,
   deviceName: string,
 ): Promise<PairingRequestResponse> {
+
+  const csrf =
+    await getCsrfToken();
 
   const response =
     await fetch(
@@ -25,9 +58,14 @@ export async function requestPairing(
       {
         method: "POST",
 
+        credentials: "include",
+
         headers: {
           "Content-Type":
             "application/json",
+
+          "X-CSRFToken":
+            csrf,
         },
 
         body: JSON.stringify({
@@ -37,10 +75,10 @@ export async function requestPairing(
       }
     );
 
-
   const data =
-    await response.json();
-
+    await readResponse(
+      response
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -49,7 +87,6 @@ export async function requestPairing(
     );
   }
 
-
   return data;
 }
 
@@ -57,15 +94,23 @@ export async function requestPairing(
 export async function claimPairing(
   code: string,
 ) {
+  const csrf =
+    await getCsrfToken();
+
   const response =
     await fetch(
       `${getApiBaseUrl()}/devices/pairing/claim/`,
       {
         method: "POST",
 
+        credentials: "include",
+
         headers: {
           "Content-Type":
             "application/json",
+
+          "X-CSRFToken":
+            csrf,
         },
 
         body: JSON.stringify({
@@ -74,10 +119,10 @@ export async function claimPairing(
       }
     );
 
-
   const data =
-    await response.json();
-
+    await readResponse(
+      response
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -85,7 +130,6 @@ export async function claimPairing(
       "Unable to pair device."
     );
   }
-
 
   return data;
 }

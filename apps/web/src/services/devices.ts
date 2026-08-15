@@ -7,7 +7,10 @@ export async function getDevices(): Promise<Device[]> {
 
   const response =
     await fetch(
-      `http://${host}:8000/api/devices/`
+      `http://${host}:8000/api/devices/`, 
+      {
+        credentials: "include",
+      }
     );
 
 

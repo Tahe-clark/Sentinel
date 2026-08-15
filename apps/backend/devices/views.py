@@ -4,9 +4,10 @@ from datetime import timedelta
 from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import ListAPIView
 
 from .models import Device, PairingRequest
 from .serializers import DeviceSerializer
@@ -15,9 +16,14 @@ from .serializers import DeviceSerializer
 class DeviceListView(ListAPIView):
     serializer_class = DeviceSerializer
 
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
     def get_queryset(self):
         return Device.objects.filter(
-            is_paired=True
+            owner=self.request.user,
+            is_paired=True,
         )
 
 
@@ -36,7 +42,7 @@ class CreatePairingRequestView(APIView):
             return Response(
                 {
                     "error":
-                    "device_id is required"
+                        "device_id is required"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -46,7 +52,7 @@ class CreatePairingRequestView(APIView):
             return Response(
                 {
                     "error":
-                    "device_name is required"
+                        "device_name is required"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -74,7 +80,7 @@ class CreatePairingRequestView(APIView):
                 {
                     "paired": True,
                     "message":
-                    "Device is already paired.",
+                        "Device is already paired.",
                 }
             )
 
@@ -129,6 +135,11 @@ class CreatePairingRequestView(APIView):
 
 
 class ClaimPairingRequestView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+
     def post(self, request):
         code = str(
             request.data.get(
@@ -142,7 +153,7 @@ class ClaimPairingRequestView(APIView):
             return Response(
                 {
                     "error":
-                    "Pairing code is required."
+                        "Pairing code is required."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -157,11 +168,12 @@ class ClaimPairingRequestView(APIView):
                     claimed=False,
                 )
             )
+
         except PairingRequest.DoesNotExist:
             return Response(
                 {
                     "error":
-                    "Invalid pairing code."
+                        "Invalid pairing code."
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
@@ -174,7 +186,7 @@ class ClaimPairingRequestView(APIView):
             return Response(
                 {
                     "error":
-                    "Pairing code has expired."
+                        "Pairing code has expired."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -182,10 +194,21 @@ class ClaimPairingRequestView(APIView):
 
         device = pairing_request.device
 
+
+        # TEMPORAIRE : utile pour vérifier quel utilisateur
+        # est réellement connecté au moment du pairing.
+        print(
+            "PAIRING USER:",
+            request.user.username
+        )
+
+
+        device.owner = request.user
         device.is_paired = True
 
         device.save(
             update_fields=[
+                "owner",
                 "is_paired",
             ]
         )

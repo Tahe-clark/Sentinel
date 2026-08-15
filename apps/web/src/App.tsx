@@ -12,6 +12,15 @@ import EmitterPage from "./pages/Emitter/EmitterPage";
 import DevicePage from "./pages/Device/DevicePage";
 import PairDevicePage from "./pages/PairDevice/PairDevicePage";
 
+import LoginPage
+  from "./pages/Login/LoginPage";
+
+import RegisterPage
+  from "./pages/Register/RegisterPage";
+
+import ProtectedRoute
+  from "./components/common/ProtectedRoute";
+
 function App() {
   return (
     <BrowserRouter>
@@ -24,11 +33,6 @@ function App() {
           <Route path="/" element={<HomePage />} />
 
           <Route
-            path="/dashboard"
-            element={<DashboardPage />}
-          />
-
-          <Route
             path="/emitter"
             element={<EmitterPage />}
           />
@@ -37,7 +41,44 @@ function App() {
             path="/device/:deviceId"
             element={<DevicePage />}
           />
+
+          <Route
+            path="/login"
+            element={<LoginPage />}
+          />
+
+          <Route
+            path="/register"
+            element={<RegisterPage />}
+          />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/pair-device"
+            element={
+              <ProtectedRoute>
+                <PairDevicePage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
+
+        <Route
+          path="/device/:deviceId"
+          element={
+            <ProtectedRoute>
+              <DevicePage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
