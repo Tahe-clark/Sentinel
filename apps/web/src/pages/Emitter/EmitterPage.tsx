@@ -12,15 +12,19 @@ import {
   getDeviceIdentity,
   getDeviceToken,
   setDeviceName,
-  setDeviceToken,
 } from "../../services/deviceIdentity";
 
 import {
   requestPairing,
 } from "../../services/pairing";
 
+import type {
+  PairingOwner,
+} from "../../services/pairing";
 
-const DEVICE = getDeviceIdentity();
+
+const DEVICE =
+  getDeviceIdentity();
 
 
 function EmitterPage() {
@@ -34,10 +38,9 @@ function EmitterPage() {
     useRef<WebSocket | null>(null);
 
   const peerConnectionRef =
-    useRef<RTCPeerConnection | null>(null);
-
-  const currentViewerRef =
-    useRef<string | null>(null);
+    useRef<RTCPeerConnection | null>(
+      null
+    );
 
   const pendingIceCandidatesRef =
     useRef<RTCIceCandidateInit[]>([]);
@@ -46,38 +49,51 @@ function EmitterPage() {
   const [cameraActive, setCameraActive] =
     useState(false);
 
-  const [connectionStatus, setConnectionStatus] =
-    useState("Waiting");
+  const [
+    connectionStatus,
+    setConnectionStatus,
+  ] = useState("Waiting");
 
-  const [deviceName, setDeviceNameState] =
-    useState(DEVICE.name);
+  const [
+    deviceName,
+    setDeviceNameState,
+  ] = useState(
+    DEVICE.name
+  );
 
-  const [pairingCode, setPairingCode] =
-    useState<string | null>(null);
+  const [
+    pairingCode,
+    setPairingCode,
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     pairingExpiresAt,
     setPairingExpiresAt,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     pairingMessage,
     setPairingMessage,
   ] = useState("");
 
+  const [
+    paired,
+    setPaired,
+  ] = useState(false);
+
+  const [
+    owner,
+    setOwner,
+  ] = useState<PairingOwner | null>(
+    null
+  );
+
 
   useEffect(() => {
-    console.log(
-      "EMITTER DEVICE ID:",
-      DEVICE.id
-    );
-
-    console.log(
-      "EMITTER DEVICE NAME:",
-      DEVICE.name
-    );
-
-
     const socket =
       createSignalingSocket(
         "emitter"
@@ -89,31 +105,13 @@ function EmitterPage() {
 
 
     socket.onopen = () => {
-      console.log(
-        "✅ Emitter connected to signaling server"
-      );
-
-
-      const deviceToken =
+      const token =
         getDeviceToken();
-
-
-      if (!deviceToken) {
-        console.log(
-          "ℹ️ Device has no authentication token yet."
-        );
-
-        console.log(
-          "Generate a pairing code to initialize device credentials."
-        );
-
-        return;
-      }
 
 
       sendDeviceOnline(
         socket,
-        deviceToken,
+        token,
         DEVICE.name
       );
     };
@@ -122,11 +120,13 @@ function EmitterPage() {
     socket.onmessage =
       async (event) => {
         const data =
-          JSON.parse(event.data);
+          JSON.parse(
+            event.data
+          );
 
 
         console.log(
-          "📩 EMITTER RECEIVED:",
+          "Emitter received:",
           data
         );
 
@@ -135,13 +135,15 @@ function EmitterPage() {
           data.type ===
           "device_authenticated"
         ) {
-          console.log(
-            "✅ Device authenticated"
+          setPaired(
+            Boolean(
+              data.paired
+            )
           );
 
-          console.log(
-            "Paired:",
-            data.paired
+          setOwner(
+            data.owner ??
+            null
           );
 
           return;
@@ -152,13 +154,12 @@ function EmitterPage() {
           data.type ===
           "device_authentication_error"
         ) {
-          console.error(
-            "❌ Device authentication error:",
-            data.message
-          );
-
           setConnectionStatus(
             "Device authentication failed"
+          );
+
+          console.error(
+            data.message
           );
 
           return;
@@ -167,16 +168,15 @@ function EmitterPage() {
 
         if (
           data.type ===
-          "pairing_completed" &&
-          data.device_id ===
-            DEVICE.id
+          "pairing_completed"
         ) {
-          console.log(
-            "✅ Pairing completed"
+          setPaired(
+            true
           );
 
-          setPairingMessage(
-            "Device paired successfully."
+          setOwner(
+            data.owner ??
+            null
           );
 
           setPairingCode(
@@ -187,6 +187,86 @@ function EmitterPage() {
             null
           );
 
+          setPairingMessage(
+            "Device paired successfully."
+          );
+
+          return;
+        }
+
+
+        if (
+          data.type ===
+          "device_unpaired"
+        ) {
+          setPaired(
+            false
+          );
+
+          setOwner(
+            null
+          );
+
+          setPairingCode(
+            null
+          );
+
+          setPairingExpiresAt(
+            null
+          );
+
+          setPairingMessage(
+            "This device has been unpaired. You can pair it with another Sentinel account."
+          );
+
+          peerConnectionRef.current
+            ?.close();
+
+          peerConnectionRef.current =
+            null;
+
+          setConnectionStatus(
+            "Unpaired"
+          );
+
+          return;
+        }
+
+
+        if (
+          data.type ===
+          "device_deleted"
+        ) {
+          setPaired(
+            false
+          );
+
+          setOwner(
+            null
+          );
+
+          setPairingCode(
+            null
+          );
+
+          setPairingExpiresAt(
+            null
+          );
+
+          setPairingMessage(
+            "This device was deleted from Sentinel. You can pair it again to recreate it."
+          );
+
+          peerConnectionRef.current
+            ?.close();
+
+          peerConnectionRef.current =
+            null;
+
+          setConnectionStatus(
+            "Device deleted"
+          );
+
           return;
         }
 
@@ -195,33 +275,16 @@ function EmitterPage() {
           data.type ===
           "watch_device"
         ) {
-          console.log(
-            "WATCH REQUEST TARGET:",
-            data.target_device_id
-          );
-
-          console.log(
-            "THIS EMITTER ID:",
-            DEVICE.id
-          );
-
-
           if (
             data.target_device_id ===
             DEVICE.id
           ) {
-            console.log(
-              "✅ DEVICE MATCH"
-            );
-
             await handleWatchRequest(
               data.viewer_id
             );
-          } else {
-            console.warn(
-              "❌ DEVICE ID DOES NOT MATCH"
-            );
           }
+
+          return;
         }
 
 
@@ -231,13 +294,11 @@ function EmitterPage() {
           data.target_device_id ===
             DEVICE.id
         ) {
-          console.log(
-            "📩 WebRTC answer received"
-          );
-
           await handleAnswer(
             data.answer
           );
+
+          return;
         }
 
 
@@ -247,10 +308,6 @@ function EmitterPage() {
           data.target_device_id ===
             DEVICE.id
         ) {
-          console.log(
-            "🧊 Remote ICE candidate received"
-          );
-
           await handleRemoteIceCandidate(
             data.candidate
           );
@@ -258,19 +315,17 @@ function EmitterPage() {
       };
 
 
-    socket.onerror = (error) => {
+    socket.onerror = (
+      error
+    ) => {
       console.error(
-        "❌ WebSocket error:",
+        "WebSocket error:",
         error
       );
     };
 
 
     socket.onclose = () => {
-      console.log(
-        "🔌 Emitter disconnected from signaling server"
-      );
-
       setConnectionStatus(
         "Signaling disconnected"
       );
@@ -287,26 +342,24 @@ function EmitterPage() {
 
       streamRef.current
         ?.getTracks()
-        .forEach((track) => {
-          track.stop();
-        });
+        .forEach(
+          (track) => {
+            track.stop();
+          }
+        );
     };
   }, []);
 
 
   function sendDeviceOnline(
     socket: WebSocket,
-    deviceToken: string,
-    name: string
+    token: string,
+    name: string,
   ) {
     if (
       socket.readyState !==
       WebSocket.OPEN
     ) {
-      console.warn(
-        "Cannot authenticate device: WebSocket is not open."
-      );
-
       return;
     }
 
@@ -323,13 +376,8 @@ function EmitterPage() {
           name,
 
         device_token:
-          deviceToken,
+          token,
       })
-    );
-
-
-    console.log(
-      "📤 Device authentication sent"
     );
   }
 
@@ -353,32 +401,21 @@ function EmitterPage() {
     );
 
 
-    const token =
-      getDeviceToken();
-
-
     const socket =
       socketRef.current;
 
 
     if (
-      token &&
       socket &&
       socket.readyState ===
         WebSocket.OPEN
     ) {
       sendDeviceOnline(
         socket,
-        token,
-        cleanName
+        getDeviceToken(),
+        cleanName,
       );
     }
-
-
-    console.log(
-      "Device renamed:",
-      cleanName
-    );
   }
 
 
@@ -393,47 +430,18 @@ function EmitterPage() {
         await requestPairing(
           DEVICE.id,
           deviceName,
+          getDeviceToken(),
         );
-
-
-      /*
-       * Le backend peut créer le credential
-       * de l'appareil pendant cette requête.
-       */
-      if (
-        result.device_token
-      ) {
-        setDeviceToken(
-          result.device_token
-        );
-
-
-        console.log(
-          "✅ Device authentication token saved"
-        );
-
-
-        const socket =
-          socketRef.current;
-
-
-        if (
-          socket &&
-          socket.readyState ===
-            WebSocket.OPEN
-        ) {
-          sendDeviceOnline(
-            socket,
-            result.device_token,
-            deviceName
-          );
-        }
-      }
 
 
       if (result.paired) {
-        setPairingMessage(
-          "This device is already paired."
+        setPaired(
+          true
+        );
+
+        setOwner(
+          result.owner ??
+          null
         );
 
         setPairingCode(
@@ -444,23 +452,53 @@ function EmitterPage() {
           null
         );
 
+        setPairingMessage(
+          "This device is already paired."
+        );
+
         return;
       }
 
 
-      setPairingCode(
-        result.code ?? null
+      setPaired(
+        false
       );
 
+      setOwner(
+        null
+      );
+
+      setPairingCode(
+        result.code ??
+        null
+      );
 
       setPairingExpiresAt(
-        result.expires_at ?? null
+        result.expires_at ??
+        null
       );
-
 
       setPairingMessage(
-        "Enter this code in your Sentinel dashboard."
+        "Enter this code in the Sentinel dashboard you want to connect this device to."
       );
+
+
+      const socket =
+        socketRef.current;
+
+
+      if (
+        socket &&
+        socket.readyState ===
+          WebSocket.OPEN
+      ) {
+        sendDeviceOnline(
+          socket,
+          getDeviceToken(),
+          deviceName,
+        );
+      }
+
     } catch (error) {
       console.error(
         "Pairing error:",
@@ -479,16 +517,14 @@ function EmitterPage() {
 
   async function startCamera() {
     try {
-      console.log(
-        "📷 Requesting camera..."
-      );
-
-
       const mediaStream =
         await navigator.mediaDevices
           .getUserMedia({
-            video: true,
-            audio: false,
+            video:
+              true,
+
+            audio:
+              false,
           });
 
 
@@ -521,11 +557,12 @@ function EmitterPage() {
 
 
       console.log(
-        "✅ Camera started"
+        "Camera started"
       );
+
     } catch (error) {
       console.error(
-        "❌ Camera error:",
+        "Camera error:",
         error
       );
     }
@@ -535,9 +572,11 @@ function EmitterPage() {
   function stopCamera() {
     streamRef.current
       ?.getTracks()
-      .forEach((track) => {
-        track.stop();
-      });
+      .forEach(
+        (track) => {
+          track.stop();
+        }
+      );
 
 
     streamRef.current =
@@ -565,10 +604,6 @@ function EmitterPage() {
       null;
 
 
-    currentViewerRef.current =
-      null;
-
-
     pendingIceCandidatesRef.current =
       [];
 
@@ -587,33 +622,17 @@ function EmitterPage() {
     setConnectionStatus(
       "Camera stopped"
     );
-
-
-    console.log(
-      "🛑 Camera stopped"
-    );
   }
 
 
   async function handleWatchRequest(
     viewerId: string
   ) {
-    console.log(
-      "👁 Viewer wants this camera:",
-      viewerId
-    );
-
-
     const stream =
       streamRef.current;
 
 
     if (!stream) {
-      console.warn(
-        "⚠️ Camera is not active"
-      );
-
-
       socketRef.current?.send(
         JSON.stringify({
           type:
@@ -627,13 +646,8 @@ function EmitterPage() {
         })
       );
 
-
       return;
     }
-
-
-    currentViewerRef.current =
-      viewerId;
 
 
     peerConnectionRef.current
@@ -656,12 +670,14 @@ function EmitterPage() {
 
     stream
       .getTracks()
-      .forEach((track) => {
-        peerConnection.addTrack(
-          track,
-          stream
-        );
-      });
+      .forEach(
+        (track) => {
+          peerConnection.addTrack(
+            track,
+            stream
+          );
+        }
+      );
 
 
     const offer =
@@ -695,11 +711,6 @@ function EmitterPage() {
     setConnectionStatus(
       "Offer sent"
     );
-
-
-    console.log(
-      "✅ OFFER SENT"
-    );
   }
 
 
@@ -722,10 +733,6 @@ function EmitterPage() {
         if (
           !event.candidate
         ) {
-          console.log(
-            "ICE gathering complete"
-          );
-
           return;
         }
 
@@ -750,43 +757,9 @@ function EmitterPage() {
 
     peerConnection.onconnectionstatechange =
       () => {
-        console.log(
-          "🔗 EMITTER WebRTC state:",
-          peerConnection.connectionState
-        );
-
-
         setConnectionStatus(
-          peerConnection.connectionState
-        );
-
-
-        if (
-          peerConnection.connectionState ===
-            "failed" ||
-          peerConnection.connectionState ===
-            "closed"
-        ) {
-          currentViewerRef.current =
-            null;
-        }
-      };
-
-
-    peerConnection.oniceconnectionstatechange =
-      () => {
-        console.log(
-          "🧊 Emitter ICE state:",
-          peerConnection.iceConnectionState
-        );
-      };
-
-
-    peerConnection.onicegatheringstatechange =
-      () => {
-        console.log(
-          "🧊 Emitter ICE gathering:",
-          peerConnection.iceGatheringState
+          peerConnection
+            .connectionState
         );
       };
 
@@ -804,10 +777,6 @@ function EmitterPage() {
 
 
     if (!peerConnection) {
-      console.warn(
-        "No peer connection for answer"
-      );
-
       return;
     }
 
@@ -816,11 +785,6 @@ function EmitterPage() {
       .setRemoteDescription(
         answer
       );
-
-
-    console.log(
-      "✅ Remote answer accepted"
-    );
 
 
     for (
@@ -848,10 +812,6 @@ function EmitterPage() {
 
 
     if (!peerConnection) {
-      console.warn(
-        "ICE candidate arrived before peer connection"
-      );
-
       return;
     }
 
@@ -873,11 +833,6 @@ function EmitterPage() {
       .addIceCandidate(
         candidate
       );
-
-
-    console.log(
-      "✅ Remote ICE candidate added"
-    );
   }
 
 
@@ -911,7 +866,9 @@ function EmitterPage() {
             deviceName
           }
 
-          onChange={(event) => {
+          onChange={(
+            event
+          ) => {
             setDeviceNameState(
               event.target.value
             );
@@ -926,13 +883,57 @@ function EmitterPage() {
         >
           Save Name
         </button>
+      </section>
+
+
+      <hr />
+
+
+      <section>
+        <h2>
+          Sentinel Account
+        </h2>
 
 
         <p>
-          Current name:
+          Status:
           {" "}
-          {deviceName}
+
+          <strong>
+            {paired
+              ? "🟢 Paired"
+              : "⚫ Not paired"}
+          </strong>
         </p>
+
+
+        {owner ? (
+          <>
+            <p>
+              Owner:
+              {" "}
+
+              <strong>
+                {owner.username}
+              </strong>
+            </p>
+
+
+            {owner.email && (
+              <p>
+                Email:
+                {" "}
+                {owner.email}
+              </p>
+            )}
+          </>
+        ) : (
+          <p>
+            Owner:
+            {" "}
+            None
+          </p>
+        )}
       </section>
 
 
@@ -945,13 +946,25 @@ function EmitterPage() {
         </h2>
 
 
-        <button
-          onClick={
-            createPairingCode
-          }
-        >
-          Pair this device
-        </button>
+        {!paired && (
+          <button
+            onClick={
+              createPairingCode
+            }
+          >
+            Pair this device
+          </button>
+        )}
+
+
+        {paired && (
+          <p>
+            To connect this device
+            to another account,
+            unpair it from its
+            current Dashboard first.
+          </p>
+        )}
 
 
         {pairingCode && (
@@ -966,15 +979,11 @@ function EmitterPage() {
             </strong>
 
 
-            <p>
-              {pairingMessage}
-            </p>
-
-
             {pairingExpiresAt && (
               <p>
                 Expires:
                 {" "}
+
                 {new Date(
                   pairingExpiresAt
                 ).toLocaleTimeString()}
@@ -984,12 +993,11 @@ function EmitterPage() {
         )}
 
 
-        {!pairingCode &&
-          pairingMessage && (
-            <p>
-              {pairingMessage}
-            </p>
-          )}
+        {pairingMessage && (
+          <p>
+            {pairingMessage}
+          </p>
+        )}
       </section>
 
 
@@ -1005,6 +1013,7 @@ function EmitterPage() {
         <p>
           Camera:
           {" "}
+
           {cameraActive
             ? "🟢 Active"
             : "⚫ Inactive"}

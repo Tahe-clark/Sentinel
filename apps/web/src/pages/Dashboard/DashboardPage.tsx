@@ -16,7 +16,9 @@ import {
 } from "../../services/signaling";
 
 import {
+  deleteDevice,
   getDevices,
+  unpairDevice,
 } from "../../services/devices";
 
 import type {
@@ -37,7 +39,21 @@ function DashboardPage() {
     useState(true);
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
+
+  const [
+    message,
+    setMessage,
+  ] = useState("");
+
+  const [
+    actionDevice,
+    setActionDevice,
+  ] = useState<string | null>(
+    null
+  );
 
 
   useEffect(() => {
@@ -48,23 +64,24 @@ function DashboardPage() {
       createSignalingSocket();
 
 
-    socket.onmessage = (event) => {
+    socket.onmessage = (
+      event
+    ) => {
       const data =
-        JSON.parse(event.data);
-
-
-      console.log(
-        "Dashboard received:",
-        data
-      );
+        JSON.parse(
+          event.data
+        );
 
 
       if (
-        data.type === "device_online"
+        data.type ===
+        "device_online"
       ) {
         setDevices(
-          (currentDevices) => {
-            const existingDevice =
+          (
+            currentDevices
+          ) => {
+            const existing =
               currentDevices.find(
                 (device) =>
                   device.device_key ===
@@ -72,67 +89,64 @@ function DashboardPage() {
               );
 
 
-            if (existingDevice) {
-              return currentDevices.map(
-                (device) => {
-                  if (
-                    device.device_key ===
-                    data.device_id
-                  ) {
-                    return {
-                      ...device,
+            if (existing) {
+              return (
+                currentDevices.map(
+                  (device) => {
+                    if (
+                      device.device_key ===
+                      data.device_id
+                    ) {
+                      return {
+                        ...device,
 
-                      name:
-                        data.device_name,
+                        name:
+                          data.device_name,
 
-                      is_active:
-                        true,
+                        is_active:
+                          true,
 
-                      last_seen:
-                        data.last_seen ??
-                        device.last_seen,
-                    };
+                        last_seen:
+                          data.last_seen ??
+                          device.last_seen,
+                      };
+                    }
+
+
+                    return device;
                   }
-
-
-                  return device;
-                }
+                )
               );
             }
 
 
-            /*
-             * Normalement l'API contient déjà
-             * tous les appareils de l'utilisateur.
-             *
-             * Mais si un appareil vient d'être pairé
-             * pendant que le dashboard est ouvert,
-             * on peut l'ajouter immédiatement.
-             */
-            const newDevice: Device = {
-              id:
-                data.id ??
-                Date.now(),
+            const newDevice:
+              Device = {
+                id:
+                  data.id ??
+                  Date.now(),
 
-              name:
-                data.device_name,
+                name:
+                  data.device_name,
 
-              device_key:
-                data.device_id,
+                device_key:
+                  data.device_id,
 
-              is_active:
-                true,
+                created_at:
+                  new Date()
+                    .toISOString(),
 
-              created_at:
-                new Date().toISOString(),
+                last_seen:
+                  data.last_seen ??
+                  new Date()
+                    .toISOString(),
 
-              last_seen:
-                data.last_seen ??
-                new Date().toISOString(),
+                is_active:
+                  true,
 
-              is_paired:
-                true,
-            };
+                is_paired:
+                  true,
+              };
 
 
             return [
@@ -145,10 +159,13 @@ function DashboardPage() {
 
 
       if (
-        data.type === "device_offline"
+        data.type ===
+        "device_offline"
       ) {
         setDevices(
-          (currentDevices) =>
+          (
+            currentDevices
+          ) =>
             currentDevices.map(
               (device) => {
                 if (
@@ -176,21 +193,21 @@ function DashboardPage() {
 
       if (
         data.type ===
-        "authorization_error"
+          "device_unpaired" ||
+        data.type ===
+          "device_deleted"
       ) {
-        console.error(
-          "Authorization error:",
-          data.message
+        setDevices(
+          (
+            currentDevices
+          ) =>
+            currentDevices.filter(
+              (device) =>
+                device.device_key !==
+                data.device_id
+            )
         );
       }
-    };
-
-
-    socket.onerror = (error) => {
-      console.error(
-        "Dashboard WebSocket error:",
-        error
-      );
     };
 
 
@@ -202,9 +219,13 @@ function DashboardPage() {
 
   async function loadDevices() {
     try {
-      setLoading(true);
+      setLoading(
+        true
+      );
 
-      setError(null);
+      setError(
+        null
+      );
 
 
       const result =
@@ -214,6 +235,7 @@ function DashboardPage() {
       setDevices(
         result
       );
+
     } catch (err) {
       console.error(
         err
@@ -223,9 +245,134 @@ function DashboardPage() {
       setError(
         "Unable to load devices."
       );
+
     } finally {
       setLoading(
         false
+      );
+    }
+  }
+
+
+  async function handleUnpair(
+    device: Device
+  ) {
+    const confirmed =
+      window.confirm(
+        `Unpair "${device.name}"?\n\nThe device will be removed from this account and can then be paired with another Sentinel account.`
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+      setActionDevice(
+        device.device_key
+      );
+
+      setMessage(
+        ""
+      );
+
+
+      const result =
+        await unpairDevice(
+          device.device_key
+        );
+
+
+      setDevices(
+        (
+          currentDevices
+        ) =>
+          currentDevices.filter(
+            (item) =>
+              item.device_key !==
+              device.device_key
+          )
+      );
+
+
+      setMessage(
+        result.message ??
+        "Device unpaired."
+      );
+
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to unpair device."
+      );
+
+    } finally {
+      setActionDevice(
+        null
+      );
+    }
+  }
+
+
+  async function handleDelete(
+    device: Device
+  ) {
+    const confirmed =
+      window.confirm(
+        `Delete "${device.name}" from Sentinel?\n\nThis removes the device record completely. The computer can still be paired again later as a new Sentinel device.`
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+      setActionDevice(
+        device.device_key
+      );
+
+      setMessage(
+        ""
+      );
+
+
+      const result =
+        await deleteDevice(
+          device.device_key
+        );
+
+
+      setDevices(
+        (
+          currentDevices
+        ) =>
+          currentDevices.filter(
+            (item) =>
+              item.device_key !==
+              device.device_key
+          )
+      );
+
+
+      setMessage(
+        result.message ??
+        "Device deleted."
+      );
+
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete device."
+      );
+
+    } finally {
+      setActionDevice(
+        null
       );
     }
   }
@@ -237,18 +384,6 @@ function DashboardPage() {
         <h1>
           Sentinel Dashboard
         </h1>
-
-
-        {user && (
-          <p>
-            Signed in as:
-            {" "}
-            <strong>
-              {user.username}
-            </strong>
-          </p>
-        )}
-
 
         <p>
           Loading devices...
@@ -264,18 +399,6 @@ function DashboardPage() {
         <h1>
           Sentinel Dashboard
         </h1>
-
-
-        {user && (
-          <p>
-            Signed in as:
-            {" "}
-            <strong>
-              {user.username}
-            </strong>
-          </p>
-        )}
-
 
         <p>
           {error}
@@ -297,6 +420,7 @@ function DashboardPage() {
           <p>
             Signed in as:
             {" "}
+
             <strong>
               {user.username}
             </strong>
@@ -321,6 +445,13 @@ function DashboardPage() {
       </p>
 
 
+      {message && (
+        <p>
+          {message}
+        </p>
+      )}
+
+
       <h2>
         My Devices
       </h2>
@@ -328,69 +459,120 @@ function DashboardPage() {
 
       {devices.length === 0 ? (
         <p>
-          No devices registered.
+          No devices paired.
         </p>
       ) : (
         <div>
           {devices.map(
-            (device) => (
-              <article
-                key={
-                  device.id
-                }
-              >
-                <h3>
-                  {device.is_active
-                    ? "🟢"
-                    : "⚫"}
-
-                  {" "}
-
-                  {device.name}
-                </h3>
+            (device) => {
+              const busy =
+                actionDevice ===
+                device.device_key;
 
 
-                <p>
-                  ID:
-                  {" "}
-                  {device.device_key}
-                </p>
+              return (
+                <article
+                  key={
+                    device.id
+                  }
+                >
+                  <h3>
+                    {device.is_active
+                      ? "🟢"
+                      : "⚫"}
 
-
-                <p>
-                  Status:
-                  {" "}
-                  {device.is_active
-                    ? "Online"
-                    : "Offline"}
-                </p>
-
-
-                {device.last_seen && (
-                  <p>
-                    Last seen:
                     {" "}
 
-                    {new Date(
-                      device.last_seen
-                    ).toLocaleString()}
-                  </p>
-                )}
+                    {device.name}
+                  </h3>
 
 
-                {device.is_active && (
                   <p>
-                    <Link
-                      to={
-                        `/device/${device.device_key}`
-                      }
-                    >
-                      View Camera
-                    </Link>
+                    ID:
+                    {" "}
+                    {device.device_key}
                   </p>
-                )}
-              </article>
-            )
+
+
+                  <p>
+                    Status:
+                    {" "}
+
+                    {device.is_active
+                      ? "Online"
+                      : "Offline"}
+                  </p>
+
+
+                  {device.last_seen && (
+                    <p>
+                      Last seen:
+                      {" "}
+
+                      {new Date(
+                        device.last_seen
+                      ).toLocaleString()}
+                    </p>
+                  )}
+
+
+                  {device.is_active && (
+                    <>
+                      <Link
+                        to={
+                          `/device/${device.device_key}`
+                        }
+                      >
+                        View Camera
+                      </Link>
+
+                      {" "}
+                    </>
+                  )}
+
+
+                  <button
+                    type="button"
+
+                    disabled={
+                      busy
+                    }
+
+                    onClick={() =>
+                      handleUnpair(
+                        device
+                      )
+                    }
+                  >
+                    {busy
+                      ? "Working..."
+                      : "Unpair"}
+                  </button>
+
+
+                  {" "}
+
+
+                  <button
+                    type="button"
+
+                    disabled={
+                      busy
+                    }
+
+                    onClick={() =>
+                      handleDelete(
+                        device
+                      )
+                    }
+                  >
+                    {busy
+                      ? "Working..."
+                      : "Delete"}
+                  </button>
+                </article>
+              );
+            }
           )}
         </div>
       )}

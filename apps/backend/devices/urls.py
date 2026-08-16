@@ -3,7 +3,9 @@ from django.urls import path
 from .views import (
     ClaimPairingRequestView,
     CreatePairingRequestView,
+    DeleteDeviceView,
     DeviceListView,
+    UnpairDeviceView,
 )
 
 
@@ -24,5 +26,17 @@ urlpatterns = [
         "pairing/claim/",
         ClaimPairingRequestView.as_view(),
         name="pairing-claim",
+    ),
+
+    path(
+        "<str:device_key>/unpair/",
+        UnpairDeviceView.as_view(),
+        name="device-unpair",
+    ),
+
+    path(
+        "<str:device_key>/",
+        DeleteDeviceView.as_view(),
+        name="device-delete",
     ),
 ]

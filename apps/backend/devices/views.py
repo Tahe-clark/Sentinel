@@ -5,17 +5,35 @@ from asgiref.sync import async_to_sync
 
 from channels.layers import get_channel_layer
 
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import (
+    check_password,
+    make_password,
+)
+from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import (
+    AllowAny,
+    IsAuthenticated,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Device, PairingRequest
 from .serializers import DeviceSerializer
+
+
+def owner_payload(owner):
+    if owner is None:
+        return None
+
+    return {
+        "id": owner.id,
+        "username": owner.username,
+        "email": owner.email,
+    }
 
 
 class DeviceListView(ListAPIView):
@@ -26,28 +44,49 @@ class DeviceListView(ListAPIView):
     ]
 
     def get_queryset(self):
-        return Device.objects.filter(
-            owner=self.request.user,
-            is_paired=True,
+        return (
+            Device.objects
+            .filter(
+                owner=self.request.user,
+                is_paired=True,
+            )
+            .order_by("name")
         )
 
 
 class CreatePairingRequestView(APIView):
-    def post(self, request):
-        device_key = request.data.get(
-            "device_id"
-        )
+    permission_classes = [
+        AllowAny,
+    ]
 
-        device_name = request.data.get(
-            "device_name"
-        )
+    def post(self, request):
+        device_key = str(
+            request.data.get(
+                "device_id",
+                ""
+            )
+        ).strip()
+
+        device_name = str(
+            request.data.get(
+                "device_name",
+                ""
+            )
+        ).strip()
+
+        device_token = str(
+            request.data.get(
+                "device_token",
+                ""
+            )
+        ).strip()
 
 
         if not device_key:
             return Response(
                 {
                     "error":
-                        "device_id is required"
+                        "device_id is required."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -57,59 +96,107 @@ class CreatePairingRequestView(APIView):
             return Response(
                 {
                     "error":
-                        "device_name is required"
+                        "device_name is required."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
 
-        device, _ = Device.objects.get_or_create(
-            device_key=device_key,
-            defaults={
-                "name": device_name,
-            },
-        )
-
-
-        device.name = device_name
-
-
-        # Les anciens appareils créés avant cette étape
-        # n'ont encore aucun secret.
-        device_token = None
-
-        if not device.auth_token_hash:
-            device_token = (
-                secrets.token_urlsafe(32)
+        if not device_token:
+            return Response(
+                {
+                    "error":
+                        "device_token is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-            device.auth_token_hash = (
-                make_password(
+
+        device = Device.objects.filter(
+            device_key=device_key
+        ).first()
+
+
+        if device is None:
+            device = Device.objects.create(
+                device_key=device_key,
+                name=device_name,
+                auth_token_hash=make_password(
                     device_token
-                )
+                ),
+                is_active=False,
+                is_paired=False,
             )
 
+        else:
+            # Compatibilité avec les appareils créés
+            # avant l'ajout du token d'appareil.
+            if not device.auth_token_hash:
+                device.auth_token_hash = (
+                    make_password(
+                        device_token
+                    )
+                )
 
-        device.save(
-            update_fields=[
-                "name",
-                "auth_token_hash",
-            ]
-        )
+                device.save(
+                    update_fields=[
+                        "auth_token_hash",
+                    ]
+                )
+
+            else:
+                valid_token = check_password(
+                    device_token,
+                    device.auth_token_hash,
+                )
+
+                if not valid_token:
+                    return Response(
+                        {
+                            "error":
+                                "Invalid device credentials."
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+
+            device.name = device_name
+
+            device.save(
+                update_fields=[
+                    "name",
+                ]
+            )
 
 
         if device.is_paired:
+            device_with_owner = (
+                Device.objects
+                .select_related("owner")
+                .get(pk=device.pk)
+            )
+
             return Response({
                 "paired": True,
 
                 "message":
-                    "Device is already paired.",
+                    "This device is already paired.",
 
-                # Présent uniquement si nous venons
-                # de créer le secret.
-                "device_token":
-                    device_token,
+                "owner":
+                    owner_payload(
+                        device_with_owner.owner
+                    ),
             })
+
+
+        if device.owner_id is not None:
+            return Response(
+                {
+                    "error":
+                        "Device is still assigned to an account."
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
         PairingRequest.objects.filter(
@@ -119,7 +206,6 @@ class CreatePairingRequestView(APIView):
 
 
         code = self.generate_unique_code()
-
 
         expires_at = (
             timezone.now()
@@ -138,13 +224,14 @@ class CreatePairingRequestView(APIView):
             {
                 "paired": False,
 
-                "code": code,
+                "code":
+                    code,
 
                 "expires_at":
                     expires_at.isoformat(),
 
-                "device_token":
-                    device_token,
+                "owner":
+                    None,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -159,14 +246,11 @@ class CreatePairingRequestView(APIView):
                 + 100000
             )
 
-            exists = (
-                PairingRequest.objects
-                .filter(
-                    code=code,
-                    claimed=False,
-                )
-                .exists()
-            )
+            # code est unique dans toute la table,
+            # pas uniquement parmi les codes actifs.
+            exists = PairingRequest.objects.filter(
+                code=code
+            ).exists()
 
             if not exists:
                 return code
@@ -178,6 +262,7 @@ class ClaimPairingRequestView(APIView):
     ]
 
 
+    @transaction.atomic
     def post(self, request):
         code = str(
             request.data.get(
@@ -200,7 +285,11 @@ class ClaimPairingRequestView(APIView):
         try:
             pairing_request = (
                 PairingRequest.objects
-                .select_related("device")
+                .select_for_update()
+                .select_related(
+                    "device",
+                    "device__owner",
+                )
                 .get(
                     code=code,
                     claimed=False,
@@ -233,6 +322,26 @@ class ClaimPairingRequestView(APIView):
         device = pairing_request.device
 
 
+        if device.is_paired:
+            return Response(
+                {
+                    "error":
+                        "Device is already paired."
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
+        if device.owner_id is not None:
+            return Response(
+                {
+                    "error":
+                        "Device already belongs to an account."
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
         device.owner = request.user
         device.is_paired = True
 
@@ -253,16 +362,10 @@ class ClaimPairingRequestView(APIView):
         )
 
 
-        # L'émetteur attend dans son groupe privé
-        # device.<UUID>.
-        #
-        # On lui annonce maintenant quel utilisateur
-        # possède l'appareil.
-        channel_layer = (
-            get_channel_layer()
-        )
+        channel_layer = get_channel_layer()
 
 
+        # Informe l'Emitter connecté.
         async_to_sync(
             channel_layer.group_send
         )(
@@ -274,8 +377,16 @@ class ClaimPairingRequestView(APIView):
                 "device_key":
                     device.device_key,
 
-                "owner_id":
-                    request.user.id,
+                "owner": {
+                    "id":
+                        request.user.id,
+
+                    "username":
+                        request.user.username,
+
+                    "email":
+                        request.user.email,
+                },
             },
         )
 
@@ -291,4 +402,219 @@ class ClaimPairingRequestView(APIView):
 
             "device":
                 serializer.data,
+
+            "owner": {
+                "id":
+                    request.user.id,
+
+                "username":
+                    request.user.username,
+
+                "email":
+                    request.user.email,
+            },
+        })
+
+
+class UnpairDeviceView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+
+    def post(
+        self,
+        request,
+        device_key,
+    ):
+        try:
+            device = (
+                Device.objects
+                .select_related("owner")
+                .get(
+                    device_key=device_key,
+                    owner=request.user,
+                    is_paired=True,
+                )
+            )
+
+        except Device.DoesNotExist:
+            return Response(
+                {
+                    "error":
+                        "Device not found or you do not own it."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+        old_owner_id = request.user.id
+
+        device_name = device.name
+
+
+        device.owner = None
+        device.is_paired = False
+
+        device.save(
+            update_fields=[
+                "owner",
+                "is_paired",
+            ]
+        )
+
+
+        PairingRequest.objects.filter(
+            device=device
+        ).delete()
+
+
+        payload = {
+            "type":
+                "device_unpaired",
+
+            "device_id":
+                device.device_key,
+
+            "device_name":
+                device_name,
+        }
+
+
+        channel_layer = get_channel_layer()
+
+
+        # Informe tous les dashboards du compte.
+        async_to_sync(
+            channel_layer.group_send
+        )(
+            f"user.{old_owner_id}",
+            {
+                "type":
+                    "signaling.message",
+
+                "payload":
+                    payload,
+            },
+        )
+
+
+        # Informe spécifiquement l'Emitter afin
+        # que son Consumer quitte le groupe utilisateur.
+        async_to_sync(
+            channel_layer.group_send
+        )(
+            f"device.{device.device_key}",
+            {
+                "type":
+                    "device.management",
+
+                "action":
+                    "unpair",
+
+                "payload":
+                    payload,
+            },
+        )
+
+
+        return Response({
+            "message":
+                "Device unpaired successfully."
+        })
+
+
+class DeleteDeviceView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+
+    def delete(
+        self,
+        request,
+        device_key,
+    ):
+        try:
+            device = Device.objects.get(
+                device_key=device_key,
+                owner=request.user,
+            )
+
+        except Device.DoesNotExist:
+            return Response(
+                {
+                    "error":
+                        "Device not found or you do not own it."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+        old_owner_id = request.user.id
+
+        saved_device_key = (
+            device.device_key
+        )
+
+        saved_device_name = (
+            device.name
+        )
+
+
+        payload = {
+            "type":
+                "device_deleted",
+
+            "device_id":
+                saved_device_key,
+
+            "device_name":
+                saved_device_name,
+        }
+
+
+        channel_layer = get_channel_layer()
+
+
+        # Informe d'abord les connexions actives.
+        async_to_sync(
+            channel_layer.group_send
+        )(
+            f"user.{old_owner_id}",
+            {
+                "type":
+                    "signaling.message",
+
+                "payload":
+                    payload,
+            },
+        )
+
+
+        async_to_sync(
+            channel_layer.group_send
+        )(
+            f"device.{saved_device_key}",
+            {
+                "type":
+                    "device.management",
+
+                "action":
+                    "delete",
+
+                "payload":
+                    payload,
+            },
+        )
+
+
+        # PairingRequest sera supprimé automatiquement
+        # grâce au CASCADE.
+        device.delete()
+
+
+        return Response({
+            "message":
+                "Device deleted successfully."
         })

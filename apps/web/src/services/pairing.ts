@@ -7,7 +7,15 @@ function getApiBaseUrl() {
   const host =
     window.location.hostname;
 
+
   return `http://${host}:8000/api`;
+}
+
+
+export interface PairingOwner {
+  id: number;
+  username: string;
+  email: string;
 }
 
 
@@ -20,7 +28,7 @@ export interface PairingRequestResponse {
 
   message?: string;
 
-  device_token?: string | null;
+  owner?: PairingOwner | null;
 }
 
 
@@ -55,6 +63,7 @@ async function readResponse(
 export async function requestPairing(
   deviceId: string,
   deviceName: string,
+  deviceToken: string,
 ): Promise<PairingRequestResponse> {
 
   const csrf =
@@ -65,7 +74,8 @@ export async function requestPairing(
     await fetch(
       `${getApiBaseUrl()}/devices/pairing/request/`,
       {
-        method: "POST",
+        method:
+          "POST",
 
         credentials:
           "include",
@@ -85,6 +95,9 @@ export async function requestPairing(
 
             device_name:
               deviceName,
+
+            device_token:
+              deviceToken,
           }),
       }
     );
