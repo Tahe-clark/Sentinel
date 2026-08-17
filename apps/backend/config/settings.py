@@ -44,7 +44,7 @@ def env_list(
     )
 
     return [
-        item.strip()
+        item.strip().rstrip("/")
         for item in value.split(",")
         if item.strip()
     ]
@@ -89,7 +89,6 @@ if DEBUG:
         "127.0.0.1",
         "0.0.0.0",
 
-        # Tes IP locales actuelles
         "192.168.1.39",
         "192.168.137.1",
         "10.0.0.245",
@@ -117,12 +116,12 @@ ALLOWED_HOSTS.extend(
 )
 
 
-# Enlève les doublons
 ALLOWED_HOSTS = list(
     dict.fromkeys(
         ALLOWED_HOSTS
     )
 )
+
 
 # =========================================================
 # APPLICATIONS
@@ -172,17 +171,16 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+
 # =========================================================
 # URL / ASGI / WSGI
 # =========================================================
 
 ROOT_URLCONF = "config.urls"
 
-
 WSGI_APPLICATION = (
     "config.wsgi.application"
 )
-
 
 ASGI_APPLICATION = (
     "config.asgi.application"
@@ -213,6 +211,7 @@ TEMPLATES = [
         },
     },
 ]
+
 
 # =========================================================
 # DATABASE
@@ -253,6 +252,7 @@ else:
         }
     }
 
+
 # =========================================================
 # PASSWORD VALIDATION
 # =========================================================
@@ -279,6 +279,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
 # =========================================================
 # INTERNATIONALIZATION
 # =========================================================
@@ -290,6 +291,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 
 USE_TZ = True
+
 
 # =========================================================
 # STATIC FILES
@@ -315,8 +317,9 @@ STORAGES = {
     },
 }
 
+
 # =========================================================
-# FRONTEND ORIGINS
+# FRONTEND / CORS / CSRF
 # =========================================================
 
 LOCAL_FRONTEND_ORIGINS = [
@@ -334,6 +337,7 @@ CORS_ALLOWED_ORIGINS = []
 CSRF_TRUSTED_ORIGINS = []
 
 
+# Local development
 if DEBUG:
     CORS_ALLOWED_ORIGINS.extend(
         LOCAL_FRONTEND_ORIGINS
@@ -344,19 +348,14 @@ if DEBUG:
     )
 
 
+# Production frontend
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
     "",
-).strip()
+).strip().rstrip("/")
 
 
 if FRONTEND_URL:
-    FRONTEND_URL = (
-        FRONTEND_URL.rstrip(
-            "/"
-        )
-    )
-
     CORS_ALLOWED_ORIGINS.append(
         FRONTEND_URL
     )
@@ -366,6 +365,7 @@ if FRONTEND_URL:
     )
 
 
+# Optional additional origins
 CORS_ALLOWED_ORIGINS.extend(
     env_list(
         "CORS_ALLOWED_ORIGINS"
@@ -380,6 +380,7 @@ CSRF_TRUSTED_ORIGINS.extend(
 )
 
 
+# Remove duplicates
 CORS_ALLOWED_ORIGINS = list(
     dict.fromkeys(
         CORS_ALLOWED_ORIGINS
@@ -396,12 +397,15 @@ CSRF_TRUSTED_ORIGINS = list(
 
 CORS_ALLOW_CREDENTIALS = True
 
-
 CORS_ALLOW_ALL_ORIGINS = False
 
+
 # =========================================================
-# COOKIES / CROSS-SITE AUTHENTICATION
+# COOKIES / AUTHENTICATION
 # =========================================================
+
+SESSION_COOKIE_HTTPONLY = True
+
 
 if DEBUG:
     SESSION_COOKIE_SECURE = False
@@ -414,15 +418,13 @@ else:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-    # Vercel et Render auront des domaines différents.
+    # Vercel frontend -> Render backend
     SESSION_COOKIE_SAMESITE = "None"
     CSRF_COOKIE_SAMESITE = "None"
 
 
-SESSION_COOKIE_HTTPONLY = True
-
 # =========================================================
-# HTTPS / REVERSE PROXY
+# HTTPS / RENDER REVERSE PROXY
 # =========================================================
 
 if not DEBUG:
@@ -432,6 +434,7 @@ if not DEBUG:
     )
 
     SECURE_SSL_REDIRECT = True
+
 
 # =========================================================
 # DJANGO CHANNELS
@@ -463,6 +466,7 @@ else:
                 "channels.layers.InMemoryChannelLayer",
         },
     }
+
 
 # =========================================================
 # EMAIL
