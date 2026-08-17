@@ -1,19 +1,26 @@
 import {
-  BrowserRouter,
+  Navigate,
   Route,
   Routes,
 } from "react-router-dom";
 
-import MainLayout from "./layouts/MainLayout";
+import MainLayout
+  from "./layouts/MainLayout";
 
-import HomePage from "./pages/Home/Homepages";
-import DashboardPage from "./pages/Dashboard/DashboardPage";
-import EmitterPage from "./pages/Emitter/EmitterPage";
-import DevicePage from "./pages/Device/DevicePage";
-import PairDevicePage from "./pages/PairDevice/PairDevicePage";
+import DashboardPage
+  from "./pages/Dashboard/DashboardPage";
+
+import DevicePage
+  from "./pages/Device/DevicePage";
+
+import EmitterPage
+  from "./pages/Emitter/EmitterPage";
 
 import LoginPage
   from "./pages/Login/LoginPage";
+
+import PairDevicePage
+  from "./pages/PairDevice/PairDevicePage";
 
 import RegisterPage
   from "./pages/Register/RegisterPage";
@@ -21,67 +28,89 @@ import RegisterPage
 import ProtectedRoute
   from "./components/common/ProtectedRoute";
 
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<MainLayout />}>
+    <Routes>
+      <Route
+        element={
+          <MainLayout />
+        }
+      >
         <Route
-  path="/pair-device"
-  element={<PairDevicePage />}
-/>
-          <Route path="/" element={<HomePage />} />
+          path="/"
 
-          <Route
-            path="/emitter"
-            element={<EmitterPage />}
-          />
+          element={
+            <Navigate
+              to="/dashboard"
+              replace
+            />
+          }
+        />
 
-          <Route
-            path="/device/:deviceId"
-            element={<DevicePage />}
-          />
 
-          <Route
-            path="/login"
-            element={<LoginPage />}
-          />
+        <Route
+          path="/dashboard"
 
-          <Route
-            path="/register"
-            element={<RegisterPage />}
-          />
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/pair-device"
-            element={
-              <ProtectedRoute>
-                <PairDevicePage />
-              </ProtectedRoute>
-            }
-          />
-        </Route>
 
         <Route
           path="/device/:deviceId"
+
           element={
             <ProtectedRoute>
               <DevicePage />
             </ProtectedRoute>
           }
         />
-      </Routes>
-    </BrowserRouter>
+
+
+        <Route
+          path="/pair-device"
+
+          element={
+            <ProtectedRoute>
+              <PairDevicePage />
+            </ProtectedRoute>
+          }
+        />
+
+
+        <Route
+          path="/emitter"
+
+          element={
+            <EmitterPage />
+          }
+        />
+
+
+        <Route
+          path="/login"
+
+          element={
+            <LoginPage />
+          }
+        />
+
+
+        <Route
+          path="/register"
+
+          element={
+            <RegisterPage />
+          }
+        />
+      </Route>
+    </Routes>
   );
 }
+
 
 export default App;

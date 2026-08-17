@@ -22,12 +22,21 @@ import type {
   PairingOwner,
 } from "../../services/pairing";
 
+import {
+  useTheme,
+} from "../../contexts/ThemeContext";
+
 
 const DEVICE =
   getDeviceIdentity();
 
 
 function EmitterPage() {
+  const {
+    theme,
+  } = useTheme();
+
+
   const videoRef =
     useRef<HTMLVideoElement>(null);
 
@@ -46,8 +55,10 @@ function EmitterPage() {
     useRef<RTCIceCandidateInit[]>([]);
 
 
-  const [cameraActive, setCameraActive] =
-    useState(false);
+  const [
+    cameraActive,
+    setCameraActive,
+  ] = useState(false);
 
   const [
     connectionStatus,
@@ -105,13 +116,14 @@ function EmitterPage() {
 
 
     socket.onopen = () => {
-      const token =
-        getDeviceToken();
+      console.log(
+        "Emitter connected"
+      );
 
 
       sendDeviceOnline(
         socket,
-        token,
+        getDeviceToken(),
         DEVICE.name
       );
     };
@@ -141,10 +153,17 @@ function EmitterPage() {
             )
           );
 
+
           setOwner(
             data.owner ??
             null
           );
+
+
+          setConnectionStatus(
+            "Ready"
+          );
+
 
           return;
         }
@@ -154,13 +173,15 @@ function EmitterPage() {
           data.type ===
           "device_authentication_error"
         ) {
-          setConnectionStatus(
-            "Device authentication failed"
-          );
-
           console.error(
             data.message
           );
+
+
+          setConnectionStatus(
+            "Authentication failed"
+          );
+
 
           return;
         }
@@ -174,22 +195,27 @@ function EmitterPage() {
             true
           );
 
+
           setOwner(
             data.owner ??
             null
           );
 
+
           setPairingCode(
             null
           );
+
 
           setPairingExpiresAt(
             null
           );
 
+
           setPairingMessage(
             "Device paired successfully."
           );
+
 
           return;
         }
@@ -203,31 +229,39 @@ function EmitterPage() {
             false
           );
 
+
           setOwner(
             null
           );
+
 
           setPairingCode(
             null
           );
 
+
           setPairingExpiresAt(
             null
           );
+
 
           setPairingMessage(
             "This device has been unpaired. You can pair it with another Sentinel account."
           );
 
+
           peerConnectionRef.current
             ?.close();
+
 
           peerConnectionRef.current =
             null;
 
+
           setConnectionStatus(
             "Unpaired"
           );
+
 
           return;
         }
@@ -241,31 +275,39 @@ function EmitterPage() {
             false
           );
 
+
           setOwner(
             null
           );
+
 
           setPairingCode(
             null
           );
 
+
           setPairingExpiresAt(
             null
           );
 
+
           setPairingMessage(
-            "This device was deleted from Sentinel. You can pair it again to recreate it."
+            "Device deleted. You can pair it again."
           );
+
 
           peerConnectionRef.current
             ?.close();
 
+
           peerConnectionRef.current =
             null;
+
 
           setConnectionStatus(
             "Device deleted"
           );
+
 
           return;
         }
@@ -273,16 +315,14 @@ function EmitterPage() {
 
         if (
           data.type ===
-          "watch_device"
+          "watch_device" &&
+          data.target_device_id ===
+          DEVICE.id
         ) {
-          if (
-            data.target_device_id ===
-            DEVICE.id
-          ) {
-            await handleWatchRequest(
-              data.viewer_id
-            );
-          }
+          await handleWatchRequest(
+            data.viewer_id
+          );
+
 
           return;
         }
@@ -297,6 +337,7 @@ function EmitterPage() {
           await handleAnswer(
             data.answer
           );
+
 
           return;
         }
@@ -321,6 +362,11 @@ function EmitterPage() {
       console.error(
         "WebSocket error:",
         error
+      );
+
+
+      setConnectionStatus(
+        "Signaling error"
       );
     };
 
@@ -396,6 +442,7 @@ function EmitterPage() {
       cleanName
     );
 
+
     setDeviceNameState(
       cleanName
     );
@@ -434,27 +481,34 @@ function EmitterPage() {
         );
 
 
-      if (result.paired) {
+      if (
+        result.paired
+      ) {
         setPaired(
           true
         );
+
 
         setOwner(
           result.owner ??
           null
         );
 
+
         setPairingCode(
           null
         );
+
 
         setPairingExpiresAt(
           null
         );
 
+
         setPairingMessage(
           "This device is already paired."
         );
+
 
         return;
       }
@@ -464,22 +518,26 @@ function EmitterPage() {
         false
       );
 
+
       setOwner(
         null
       );
+
 
       setPairingCode(
         result.code ??
         null
       );
 
+
       setPairingExpiresAt(
         result.expires_at ??
         null
       );
 
+
       setPairingMessage(
-        "Enter this code in the Sentinel dashboard you want to connect this device to."
+        "Enter this code in the Sentinel dashboard."
       );
 
 
@@ -501,7 +559,6 @@ function EmitterPage() {
 
     } catch (error) {
       console.error(
-        "Pairing error:",
         error
       );
 
@@ -556,14 +613,19 @@ function EmitterPage() {
       );
 
 
-      console.log(
-        "Camera started"
+      setConnectionStatus(
+        "Camera active"
       );
 
     } catch (error) {
       console.error(
         "Camera error:",
         error
+      );
+
+
+      setConnectionStatus(
+        "Camera error"
       );
     }
   }
@@ -645,6 +707,7 @@ function EmitterPage() {
             DEVICE.id,
         })
       );
+
 
       return;
     }
@@ -825,6 +888,7 @@ function EmitterPage() {
           candidate
         );
 
+
       return;
     }
 
@@ -836,250 +900,1303 @@ function EmitterPage() {
   }
 
 
+  if (
+    theme === "glass"
+  ) {
+    return (
+      <GlassEmitter
+        videoRef={
+          videoRef
+        }
+
+        deviceName={
+          deviceName
+        }
+
+        setDeviceNameState={
+          setDeviceNameState
+        }
+
+        saveDeviceName={
+          saveDeviceName
+        }
+
+        startCamera={
+          startCamera
+        }
+
+        stopCamera={
+          stopCamera
+        }
+
+        cameraActive={
+          cameraActive
+        }
+
+        connectionStatus={
+          connectionStatus
+        }
+
+        paired={
+          paired
+        }
+
+        owner={
+          owner
+        }
+
+        pairingCode={
+          pairingCode
+        }
+
+        pairingExpiresAt={
+          pairingExpiresAt
+        }
+
+        pairingMessage={
+          pairingMessage
+        }
+
+        createPairingCode={
+          createPairingCode
+        }
+      />
+    );
+  }
+
+
   return (
-    <main>
-      <h1>
-        Emitter
-      </h1>
+    <TacticalEmitter
+      videoRef={
+        videoRef
+      }
+
+      deviceName={
+        deviceName
+      }
+
+      setDeviceNameState={
+        setDeviceNameState
+      }
+
+      saveDeviceName={
+        saveDeviceName
+      }
+
+      startCamera={
+        startCamera
+      }
+
+      stopCamera={
+        stopCamera
+      }
+
+      cameraActive={
+        cameraActive
+      }
+
+      connectionStatus={
+        connectionStatus
+      }
+
+      paired={
+        paired
+      }
+
+      owner={
+        owner
+      }
+
+      pairingCode={
+        pairingCode
+      }
+
+      pairingExpiresAt={
+        pairingExpiresAt
+      }
+
+      pairingMessage={
+        pairingMessage
+      }
+
+      createPairingCode={
+        createPairingCode
+      }
+    />
+  );
+}
 
 
-      <section>
-        <h2>
-          Device
-        </h2>
+interface EmitterViewProps {
+  videoRef:
+    React.RefObject<HTMLVideoElement | null>;
+
+  deviceName:
+    string;
+
+  setDeviceNameState:
+    (value: string) => void;
+
+  saveDeviceName:
+    () => void;
+
+  startCamera:
+    () => void;
+
+  stopCamera:
+    () => void;
+
+  cameraActive:
+    boolean;
+
+  connectionStatus:
+    string;
+
+  paired:
+    boolean;
+
+  owner:
+    PairingOwner | null;
+
+  pairingCode:
+    string | null;
+
+  pairingExpiresAt:
+    string | null;
+
+  pairingMessage:
+    string;
+
+  createPairingCode:
+    () => void;
+}
 
 
-        <p>
-          Device ID:
-          {" "}
-          {DEVICE.id}
-        </p>
+function TacticalEmitter({
+  videoRef,
+  deviceName,
+  setDeviceNameState,
+  saveDeviceName,
+  startCamera,
+  stopCamera,
+  cameraActive,
+  connectionStatus,
+  paired,
+  owner,
+  pairingCode,
+  pairingExpiresAt,
+  pairingMessage,
+  createPairingCode,
+}: EmitterViewProps) {
+
+  return (
+    <div
+      className="
+        space-y-6
+      "
+    >
+      <div
+        className="
+          flex
+          items-center
+          justify-between
+          border-b
+          border-tactical-border
+          pb-4
+        "
+      >
+        <div>
+          <h1
+            className="
+              text-xl
+              font-bold
+              font-mono
+              text-white
+              tracking-wide
+              uppercase
+            "
+          >
+            Console Émetteur //
+            Streamer local
+          </h1>
+
+          <p
+            className="
+              text-xs
+              font-mono
+              text-slate-400
+            "
+          >
+            Configuration du nœud
+            de capture vidéo
+          </p>
+        </div>
+      </div>
 
 
-        <label>
-          Device name
-        </label>
-
-
-        <input
-          value={
-            deviceName
-          }
-
-          onChange={(
-            event
-          ) => {
-            setDeviceNameState(
-              event.target.value
-            );
-          }}
-        />
-
-
-        <button
-          onClick={
-            saveDeviceName
-          }
+      <div
+        className="
+          grid
+          grid-cols-1
+          lg:grid-cols-3
+          gap-6
+          font-mono
+        "
+      >
+        <div
+          className="
+            lg:col-span-2
+            panel-tactical
+            rounded
+            p-4
+            space-y-4
+          "
         >
-          Save Name
-        </button>
-      </section>
+          <div
+            className="
+              relative
+              aspect-video
+              bg-black
+              rounded
+              border
+              border-tactical-border
+              flex
+              items-center
+              justify-center
+              overflow-hidden
+            "
+          >
+            <video
+              ref={
+                videoRef
+              }
+
+              autoPlay
+
+              playsInline
+
+              muted
+
+              className="
+                absolute
+                inset-0
+                w-full
+                h-full
+                object-cover
+              "
+            />
 
 
-      <hr />
-
-
-      <section>
-        <h2>
-          Sentinel Account
-        </h2>
-
-
-        <p>
-          Status:
-          {" "}
-
-          <strong>
-            {paired
-              ? "🟢 Paired"
-              : "⚫ Not paired"}
-          </strong>
-        </p>
-
-
-        {owner ? (
-          <>
-            <p>
-              Owner:
+            <div
+              className="
+                absolute
+                top-3
+                left-3
+                text-[10px]
+                text-emerald-400
+                bg-black/80
+                px-2
+                py-1
+                border
+                border-emerald-500/30
+                z-10
+              "
+            >
+              SIGNAL:
               {" "}
 
-              <strong>
-                {owner.username}
-              </strong>
+              {cameraActive
+                ? "WEBRTC_ACTIVE"
+                : "STANDBY"}
+            </div>
+
+
+            {!cameraActive && (
+              <div
+                className="
+                  w-20
+                  h-20
+                  border
+                  border-emerald-500/40
+                  rounded
+                  flex
+                  items-center
+                  justify-center
+                  text-emerald-500/60
+                  text-xs
+                  z-10
+                "
+              >
+                [ + ]
+              </div>
+            )}
+          </div>
+
+
+          <div
+            className="
+              flex
+              items-center
+              justify-between
+              gap-4
+            "
+          >
+            <div
+              className="
+                flex
+                gap-2
+              "
+            >
+              <button
+                onClick={
+                  startCamera
+                }
+
+                disabled={
+                  cameraActive
+                }
+
+                className="
+                  px-4
+                  py-2
+                  bg-emerald-600
+                  hover:bg-emerald-500
+                  disabled:opacity-40
+                  disabled:cursor-not-allowed
+                  text-black
+                  font-bold
+                  text-xs
+                  rounded
+                  transition-colors
+                  uppercase
+                "
+              >
+                Démarrer Capture
+              </button>
+
+
+              <button
+                onClick={
+                  stopCamera
+                }
+
+                disabled={
+                  !cameraActive
+                }
+
+                className="
+                  px-4
+                  py-2
+                  bg-tactical-800
+                  hover:bg-slate-700
+                  disabled:opacity-40
+                  disabled:cursor-not-allowed
+                  text-slate-300
+                  text-xs
+                  rounded
+                  border
+                  border-tactical-border
+                  uppercase
+                "
+              >
+                Couper
+              </button>
+            </div>
+
+
+            <span
+              className="
+                text-xs
+                text-slate-400
+              "
+            >
+              ID NŒUD:
+              {" "}
+
+              {DEVICE.id.slice(
+                0,
+                8
+              )}
+            </span>
+          </div>
+
+
+          <div
+            className="
+              flex
+              items-center
+              justify-between
+              text-[10px]
+              text-slate-500
+              border-t
+              border-tactical-border
+              pt-3
+            "
+          >
+            <span>
+              WEBRTC:
+              {" "}
+              {connectionStatus}
+            </span>
+
+            <span>
+              CAMERA:
+              {" "}
+              {cameraActive
+                ? "ACTIVE"
+                : "OFFLINE"}
+            </span>
+          </div>
+        </div>
+
+
+        <div
+          className="
+            space-y-4
+          "
+        >
+          <div
+            className="
+              panel-tactical
+              p-4
+              rounded
+              space-y-3
+            "
+          >
+            <h2
+              className="
+                text-xs
+                font-bold
+                text-white
+                uppercase
+                border-b
+                border-tactical-border
+                pb-2
+              "
+            >
+              Identité de la station
+            </h2>
+
+
+            <div
+              className="
+                space-y-2
+              "
+            >
+              <label
+                className="
+                  text-[10px]
+                  text-slate-400
+                "
+              >
+                NOM RECONNU
+              </label>
+
+
+              <input
+                type="text"
+
+                value={
+                  deviceName
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setDeviceNameState(
+                    event.target.value
+                  )
+                }
+
+                className="
+                  w-full
+                  px-3
+                  py-1.5
+                  bg-black
+                  border
+                  border-tactical-border
+                  text-xs
+                  text-emerald-400
+                  focus:outline-none
+                  focus:border-emerald-500
+                "
+              />
+            </div>
+
+
+            <button
+              onClick={
+                saveDeviceName
+              }
+
+              className="
+                w-full
+                py-1.5
+                bg-tactical-800
+                hover:bg-slate-700
+                text-slate-200
+                text-xs
+                rounded
+                border
+                border-tactical-border
+              "
+            >
+              Mettre à jour
+            </button>
+          </div>
+
+
+          <div
+            className="
+              panel-tactical
+              p-4
+              rounded
+              space-y-3
+              border-l-2
+              border-l-emerald-500
+            "
+          >
+            <h2
+              className="
+                text-xs
+                font-bold
+                text-white
+                uppercase
+              "
+            >
+              Association Tableau
+              de Bord
+            </h2>
+
+
+            <p
+              className="
+                text-[11px]
+                text-slate-400
+              "
+            >
+              {paired
+                ? "Cet émetteur est associé à un compte Sentinel."
+                : "Code à usage unique pour l'appairage distant."}
             </p>
 
 
-            {owner.email && (
-              <p>
-                Email:
-                {" "}
-                {owner.email}
-              </p>
+            {paired ? (
+              <div
+                className="
+                  p-3
+                  bg-black
+                  border
+                  border-emerald-500/30
+                  rounded
+                  space-y-2
+                "
+              >
+                <span
+                  className="
+                    text-[10px]
+                    text-emerald-500/80
+                    block
+                  "
+                >
+                  COMPTE ASSOCIÉ
+                </span>
+
+
+                <span
+                  className="
+                    text-base
+                    font-bold
+                    text-emerald-400
+                  "
+                >
+                  {owner?.username ??
+                    "Unknown"}
+                </span>
+
+
+                {owner?.email && (
+                  <p
+                    className="
+                      text-[10px]
+                      text-slate-400
+                    "
+                  >
+                    {owner.email}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {pairingCode ? (
+                  <div
+                    className="
+                      p-3
+                      bg-black
+                      border
+                      border-emerald-500/30
+                      rounded
+                      text-center
+                    "
+                  >
+                    <span
+                      className="
+                        text-[10px]
+                        text-emerald-500/80
+                        block
+                      "
+                    >
+                      CODE CLÉ
+                    </span>
+
+
+                    <span
+                      className="
+                        text-xl
+                        font-bold
+                        text-emerald-400
+                        tracking-widest
+                      "
+                    >
+                      {formatPairingCode(
+                        pairingCode
+                      )}
+                    </span>
+
+
+                    {pairingExpiresAt && (
+                      <p
+                        className="
+                          text-[9px]
+                          text-slate-500
+                          mt-2
+                        "
+                      >
+                        EXP:
+                        {" "}
+
+                        {new Date(
+                          pairingExpiresAt
+                        ).toLocaleTimeString()}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={
+                      createPairingCode
+                    }
+
+                    className="
+                      w-full
+                      py-2
+                      bg-emerald-600
+                      hover:bg-emerald-500
+                      text-black
+                      font-bold
+                      text-xs
+                      rounded
+                      uppercase
+                    "
+                  >
+                    Générer un code
+                  </button>
+                )}
+              </>
             )}
-          </>
-        ) : (
-          <p>
-            Owner:
-            {" "}
-            None
-          </p>
-        )}
-      </section>
 
 
-      <hr />
-
-
-      <section>
-        <h2>
-          Device Pairing
-        </h2>
-
-
-        {!paired && (
-          <button
-            onClick={
-              createPairingCode
-            }
-          >
-            Pair this device
-          </button>
-        )}
-
-
-        {paired && (
-          <p>
-            To connect this device
-            to another account,
-            unpair it from its
-            current Dashboard first.
-          </p>
-        )}
-
-
-        {pairingCode && (
-          <div>
-            <h3>
-              Pairing Code
-            </h3>
-
-
-            <strong>
-              {pairingCode}
-            </strong>
-
-
-            {pairingExpiresAt && (
-              <p>
-                Expires:
-                {" "}
-
-                {new Date(
-                  pairingExpiresAt
-                ).toLocaleTimeString()}
+            {pairingMessage && (
+              <p
+                className="
+                  text-[10px]
+                  text-slate-400
+                "
+              >
+                {pairingMessage}
               </p>
             )}
           </div>
-        )}
 
 
-        {pairingMessage && (
-          <p>
-            {pairingMessage}
-          </p>
-        )}
-      </section>
+          <div
+            className="
+              panel-tactical
+              p-4
+              rounded
+              space-y-2
+            "
+          >
+            <h2
+              className="
+                text-xs
+                font-bold
+                text-white
+                uppercase
+              "
+            >
+              État du terminal
+            </h2>
 
 
-      <hr />
+            <div
+              className="
+                flex
+                justify-between
+                text-[10px]
+              "
+            >
+              <span
+                className="
+                  text-slate-400
+                "
+              >
+                PAIRING
+              </span>
+
+              <span
+                className={
+                  paired
+                    ? "text-emerald-400"
+                    : "text-amber-400"
+                }
+              >
+                {paired
+                  ? "PAIRED"
+                  : "UNPAIRED"}
+              </span>
+            </div>
 
 
-      <section>
-        <h2>
-          Camera
-        </h2>
+            <div
+              className="
+                flex
+                justify-between
+                text-[10px]
+              "
+            >
+              <span
+                className="
+                  text-slate-400
+                "
+              >
+                VIDEO
+              </span>
 
-
-        <p>
-          Camera:
-          {" "}
-
-          {cameraActive
-            ? "🟢 Active"
-            : "⚫ Inactive"}
-        </p>
-
-
-        <p>
-          WebRTC:
-          {" "}
-          {connectionStatus}
-        </p>
-
-
-        <button
-          onClick={
-            startCamera
-          }
-
-          disabled={
-            cameraActive
-          }
-        >
-          Start Camera
-        </button>
-
-
-        <button
-          onClick={
-            stopCamera
-          }
-
-          disabled={
-            !cameraActive
-          }
-        >
-          Stop Camera
-        </button>
-
-
-        <div>
-          <video
-            ref={
-              videoRef
-            }
-
-            autoPlay
-
-            playsInline
-
-            muted
-
-            style={{
-              width:
-                "600px",
-
-              maxWidth:
-                "100%",
-
-              background:
-                "black",
-            }}
-          />
+              <span
+                className={
+                  cameraActive
+                    ? "text-emerald-400"
+                    : "text-slate-500"
+                }
+              >
+                {cameraActive
+                  ? "ACTIVE"
+                  : "STANDBY"}
+              </span>
+            </div>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
+}
+
+
+function GlassEmitter({
+  videoRef,
+  deviceName,
+  setDeviceNameState,
+  saveDeviceName,
+  startCamera,
+  stopCamera,
+  cameraActive,
+  connectionStatus,
+  paired,
+  owner,
+  pairingCode,
+  pairingExpiresAt,
+  pairingMessage,
+  createPairingCode,
+}: EmitterViewProps) {
+
+  return (
+    <div
+      className="
+        space-y-8
+      "
+    >
+      <div>
+        <h1
+          className="
+            text-3xl
+            font-semibold
+            tracking-tight
+          "
+        >
+          Émetteur
+        </h1>
+
+        <p
+          className="
+            text-sm
+            text-muted
+            mt-1
+          "
+        >
+          Transmettre le flux vidéo
+          de cet appareil
+        </p>
+      </div>
+
+
+      <div
+        className="
+          grid
+          grid-cols-1
+          md:grid-cols-3
+          gap-6
+        "
+      >
+        <div
+          className="
+            md:col-span-2
+            glass-card
+            rounded-3xl
+            p-4
+            space-y-4
+          "
+        >
+          <div
+            className="
+              aspect-video
+              bg-black
+              rounded-2xl
+              flex
+              items-center
+              justify-center
+              relative
+              overflow-hidden
+            "
+          >
+            <video
+              ref={
+                videoRef
+              }
+
+              autoPlay
+
+              playsInline
+
+              muted
+
+              className="
+                absolute
+                inset-0
+                w-full
+                h-full
+                object-cover
+              "
+            />
+
+
+            {!cameraActive && (
+              <span
+                className="
+                  text-xs
+                  text-white/50
+                  z-10
+                "
+              >
+                Aperçu Caméra
+              </span>
+            )}
+
+
+            <span
+              className="
+                inline-flex
+                items-center
+                gap-1.5
+                absolute
+                top-3
+                left-3
+                px-3
+                py-1
+                rounded-full
+                bg-black/40
+                backdrop-blur-md
+                text-white
+                text-[11px]
+                font-medium
+                z-10
+              "
+            >
+              <span
+                className={
+                  cameraActive
+                    ? "w-1.5 h-1.5 rounded-full bg-emerald-400"
+                    : "w-1.5 h-1.5 rounded-full bg-white/30"
+                }
+              />
+
+              {cameraActive
+                ? "En direct"
+                : "Inactif"}
+            </span>
+          </div>
+
+
+          <div
+            className="
+              flex
+              justify-between
+              items-center
+              px-1
+              gap-3
+            "
+          >
+            <div
+              className="
+                flex
+                gap-2
+              "
+            >
+              {!cameraActive ? (
+                <button
+                  onClick={
+                    startCamera
+                  }
+
+                  className="
+                    px-5
+                    py-2
+                    rounded-full
+                    btn-primary
+                    text-xs
+                    font-medium
+                    transition-all
+                  "
+                >
+                  Démarrer la caméra
+                </button>
+              ) : (
+                <button
+                  onClick={
+                    stopCamera
+                  }
+
+                  className="
+                    px-5
+                    py-2
+                    rounded-full
+                    bg-rose-500
+                    hover:bg-rose-600
+                    text-white
+                    text-xs
+                    font-medium
+                    transition-all
+                  "
+                >
+                  Arrêter la caméra
+                </button>
+              )}
+            </div>
+
+
+            <span
+              className="
+                text-xs
+                text-muted
+              "
+            >
+              {connectionStatus}
+            </span>
+          </div>
+        </div>
+
+
+        <div
+          className="
+            space-y-6
+          "
+        >
+          <div
+            className="
+              glass-card
+              rounded-3xl
+              p-5
+              space-y-3
+            "
+          >
+            <label
+              className="
+                text-xs
+                font-medium
+                text-muted
+                block
+              "
+            >
+              Nom de l'appareil
+            </label>
+
+
+            <input
+              type="text"
+
+              value={
+                deviceName
+              }
+
+              onChange={(
+                event
+              ) =>
+                setDeviceNameState(
+                  event.target.value
+                )
+              }
+
+              className="
+                glass-input
+                w-full
+                px-3.5
+                py-2
+                rounded-xl
+                text-xs
+                font-medium
+                focus:outline-none
+              "
+            />
+
+
+            <button
+              onClick={
+                saveDeviceName
+              }
+
+              className="
+                w-full
+                py-2
+                rounded-xl
+                btn-solid
+                text-xs
+                font-medium
+              "
+            >
+              Enregistrer
+            </button>
+          </div>
+
+
+          <div
+            className="
+              glass-card
+              rounded-3xl
+              p-5
+              space-y-2
+              text-center
+            "
+          >
+            {paired ? (
+              <>
+                <span
+                  className="
+                    text-xs
+                    text-muted
+                  "
+                >
+                  Compte associé
+                </span>
+
+                <p
+                  className="
+                    text-xl
+                    font-semibold
+                  "
+                >
+                  {owner?.username ??
+                    "Unknown"}
+                </p>
+
+                {owner?.email && (
+                  <p
+                    className="
+                      text-xs
+                      text-muted
+                    "
+                  >
+                    {owner.email}
+                  </p>
+                )}
+              </>
+            ) : pairingCode ? (
+              <>
+                <span
+                  className="
+                    text-xs
+                    text-muted
+                  "
+                >
+                  Code d'appairage
+                </span>
+
+                <p
+                  className="
+                    text-2xl
+                    font-semibold
+                    tracking-widest
+                  "
+                >
+                  {formatPairingCode(
+                    pairingCode
+                  )}
+                </p>
+
+                {pairingExpiresAt && (
+                  <p
+                    className="
+                      text-[10px]
+                      text-muted
+                    "
+                  >
+                    Expire à
+                    {" "}
+
+                    {new Date(
+                      pairingExpiresAt
+                    ).toLocaleTimeString()}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <span
+                  className="
+                    text-xs
+                    text-muted
+                  "
+                >
+                  Aucun compte associé
+                </span>
+
+                <button
+                  onClick={
+                    createPairingCode
+                  }
+
+                  className="
+                    w-full
+                    py-2
+                    rounded-xl
+                    btn-primary
+                    text-xs
+                    font-medium
+                    mt-2
+                  "
+                >
+                  Générer un code
+                </button>
+              </>
+            )}
+
+
+            {pairingMessage && (
+              <p
+                className="
+                  text-[10px]
+                  text-muted
+                  pt-1
+                "
+              >
+                {pairingMessage}
+              </p>
+            )}
+          </div>
+
+
+          <div
+            className="
+              glass-card
+              rounded-3xl
+              p-5
+              space-y-2
+            "
+          >
+            <div
+              className="
+                flex
+                justify-between
+                text-xs
+              "
+            >
+              <span
+                className="
+                  text-muted
+                "
+              >
+                Device ID
+              </span>
+
+              <span>
+                {DEVICE.id.slice(
+                  0,
+                  8
+                )}
+                ...
+              </span>
+            </div>
+
+
+            <div
+              className="
+                flex
+                justify-between
+                text-xs
+              "
+            >
+              <span
+                className="
+                  text-muted
+                "
+              >
+                Pairing
+              </span>
+
+              <span>
+                {paired
+                  ? "Paired"
+                  : "Not paired"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function formatPairingCode(
+  code: string
+) {
+  const clean =
+    code.replace(
+      /\D/g,
+      ""
+    );
+
+
+  if (
+    clean.length !== 6
+  ) {
+    return code;
+  }
+
+
+  return `${clean.slice(
+    0,
+    3
+  )}-${clean.slice(3)}`;
 }
 
 
