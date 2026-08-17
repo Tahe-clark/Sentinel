@@ -2,7 +2,8 @@ import os
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.security.websocket import OriginValidator
+
 from django.core.asgi import get_asgi_application
 
 
@@ -12,20 +13,42 @@ os.environ.setdefault(
 )
 
 
+# Initialise Django avant d'importer les routes
+# qui peuvent elles-mêmes importer des modèles.
 django_asgi_app = get_asgi_application()
 
 
 from signaling.routing import websocket_urlpatterns
 
 
-application = ProtocolTypeRouter({
-    "http": django_asgi_app,
+WEBSOCKET_ALLOWED_ORIGINS = [
+    # Frontend production
+    "https://sentinel-web-snowy.vercel.app",
 
-    "websocket": AllowedHostsOriginValidator(
-        AuthMiddlewareStack(
-            URLRouter(
-                websocket_urlpatterns
-            )
-        )
-    ),
-})
+    # Local development
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+
+    # Tes réseaux locaux utilisés pendant le développement
+    "http://192.168.1.39:5173",
+    "http://192.168.137.1:5173",
+    "http://10.0.0.245:5173",
+]
+
+
+application = ProtocolTypeRouter(
+    {
+        "http":
+            django_asgi_app,
+
+        "websocket":
+            OriginValidator(
+                AuthMiddlewareStack(
+                    URLRouter(
+                        websocket_urlpatterns
+                    )
+                ),
+                WEBSOCKET_ALLOWED_ORIGINS,
+            ),
+    }
+)
