@@ -287,8 +287,7 @@ class ClaimPairingRequestView(APIView):
                 PairingRequest.objects
                 .select_for_update()
                 .select_related(
-                    "device",
-                    "device__owner",
+                    "device"
                 )
                 .get(
                     code=code,
