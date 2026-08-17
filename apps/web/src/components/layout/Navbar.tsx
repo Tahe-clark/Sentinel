@@ -1,16 +1,63 @@
 import {
   NavLink,
+  useNavigate,
 } from "react-router-dom";
+
+import {
+  useAuth,
+} from "../../contexts/AuthContext";
 
 import {
   useTheme,
 } from "../../contexts/ThemeContext";
+
+import {
+  logout,
+} from "../../services/auth";
 
 
 function Navbar() {
   const {
     theme,
   } = useTheme();
+
+
+  const {
+    user,
+    clearUser,
+  } = useAuth();
+
+
+  const navigate =
+    useNavigate();
+
+
+  async function handleLogout() {
+    try {
+      await logout();
+
+
+      clearUser();
+
+
+      navigate(
+        "/login"
+      );
+
+    } catch (error) {
+      console.error(
+        "Logout failed:",
+        error
+      );
+
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Logout failed."
+      );
+    }
+  }
 
 
   if (
@@ -39,6 +86,7 @@ function Navbar() {
             justify-between
             gap-3
             shadow-sm
+            overflow-x-auto
           "
         >
           <div
@@ -46,6 +94,7 @@ function Navbar() {
               flex
               items-center
               gap-2.5
+              flex-shrink-0
             "
           >
             <div
@@ -63,6 +112,7 @@ function Navbar() {
             >
               S
             </div>
+
 
             <span
               className="
@@ -88,26 +138,79 @@ function Navbar() {
               font-medium
             "
           >
-            <GlassNav
-              to="/dashboard"
-              label="Dashboard"
-            />
+            {user && (
+              <>
+                <GlassNav
+                  to="/dashboard"
+                  label="Dashboard"
+                />
 
-            <GlassNav
-              to="/emitter"
-              label="Émetteur"
-            />
+                <GlassNav
+                  to="/emitter"
+                  label="Émetteur"
+                />
 
-            <GlassNav
-              to="/pair-device"
-              label="Appairer"
-            />
+                <GlassNav
+                  to="/pair-device"
+                  label="Appairer"
+                />
+              </>
+            )}
 
-            <GlassNav
-              to="/login"
-              label="Connexion"
-            />
+
+            {!user && (
+              <GlassNav
+                to="/login"
+                label="Connexion"
+              />
+            )}
           </nav>
+
+
+          {user && (
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                flex-shrink-0
+              "
+            >
+              <span
+                className="
+                  hidden
+                  md:inline
+                  text-xs
+                  text-muted
+                "
+              >
+                {user.username}
+              </span>
+
+
+              <button
+                type="button"
+
+                onClick={
+                  handleLogout
+                }
+
+                className="
+                  px-3
+                  py-1.5
+                  rounded-full
+                  bg-white/5
+                  hover:bg-white/10
+                  text-xs
+                  text-muted
+                  hover:text-white
+                  transition-all
+                "
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </header>
     );
@@ -143,6 +246,7 @@ function Navbar() {
             flex
             items-center
             gap-3
+            flex-shrink-0
           "
         >
           <div
@@ -166,6 +270,7 @@ function Navbar() {
             SYS
           </div>
 
+
           <div>
             <span
               className="
@@ -179,6 +284,7 @@ function Navbar() {
             >
               SENTINEL // OPS
             </span>
+
 
             <span
               className="
@@ -208,59 +314,103 @@ function Navbar() {
             border-tactical-border
             font-mono
             text-xs
+            overflow-x-auto
           "
         >
-          <TacticalNav
-            to="/dashboard"
-            label="01. DASHBOARD"
-          />
+          {user && (
+            <>
+              <TacticalNav
+                to="/dashboard"
+                label="01. DASHBOARD"
+              />
 
-          <TacticalNav
-            to="/emitter"
-            label="02. ÉMETTEUR"
-          />
+              <TacticalNav
+                to="/emitter"
+                label="02. ÉMETTEUR"
+              />
 
-          <TacticalNav
-            to="/pair-device"
-            label="03. APPAIRAGE"
-          />
+              <TacticalNav
+                to="/pair-device"
+                label="03. APPAIRAGE"
+              />
+            </>
+          )}
 
-          <TacticalNav
-            to="/login"
-            label="04. LOGIN"
-          />
+
+          {!user && (
+            <TacticalNav
+              to="/login"
+              label="04. LOGIN"
+            />
+          )}
         </nav>
 
 
-        <div
-          className="
-            hidden
-            md:flex
-            items-center
-            gap-2
-            px-2.5
-            py-1
-            rounded
-            bg-emerald-950/40
-            border
-            border-emerald-500/30
-            text-emerald-400
-            text-xs
-            font-mono
-          "
-        >
-          <span
+        {user && (
+          <div
             className="
-              w-2
-              h-2
-              rounded-full
-              bg-emerald-400
-              animate-pulse
+              hidden
+              md:flex
+              items-center
+              gap-3
+              flex-shrink-0
             "
-          />
+          >
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                px-2.5
+                py-1
+                rounded
+                bg-emerald-950/40
+                border
+                border-emerald-500/30
+                text-emerald-400
+                text-xs
+                font-mono
+              "
+            >
+              <span
+                className="
+                  w-2
+                  h-2
+                  rounded-full
+                  bg-emerald-400
+                  animate-pulse
+                "
+              />
 
-          FLUX EN DIRECT
-        </div>
+              {user.username}
+            </div>
+
+
+            <button
+              type="button"
+
+              onClick={
+                handleLogout
+              }
+
+              className="
+                px-3
+                py-1.5
+                rounded
+                border
+                border-red-500/30
+                bg-red-950/20
+                text-red-400
+                font-mono
+                text-[10px]
+                hover:bg-red-950/40
+                transition-colors
+              "
+            >
+              LOGOUT
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -276,9 +426,13 @@ function TacticalNav({
 }) {
   return (
     <NavLink
-      to={to}
+      to={
+        to
+      }
 
-      className={({ isActive }) =>
+      className={({
+        isActive,
+      }) =>
         isActive
           ? "px-3 py-1.5 rounded transition-all text-emerald-400 bg-emerald-950/60 border border-emerald-500/40"
           : "px-3 py-1.5 rounded transition-all text-slate-400 hover:text-white"
@@ -299,9 +453,13 @@ function GlassNav({
 }) {
   return (
     <NavLink
-      to={to}
+      to={
+        to
+      }
 
-      className={({ isActive }) =>
+      className={({
+        isActive,
+      }) =>
         isActive
           ? "px-3.5 py-1.5 rounded-full transition-all btn-solid shadow-sm"
           : "px-3.5 py-1.5 rounded-full transition-all text-muted hover:text-current"

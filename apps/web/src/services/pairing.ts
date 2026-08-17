@@ -1,15 +1,10 @@
 import {
+  API_BASE_URL,
+} from "../config/environment";
+
+import {
   getCsrfToken,
 } from "./auth";
-
-
-function getApiBaseUrl() {
-  const host =
-    window.location.hostname;
-
-
-  return `http://${host}:8000/api`;
-}
 
 
 export interface PairingOwner {
@@ -72,7 +67,7 @@ export async function requestPairing(
 
   const response =
     await fetch(
-      `${getApiBaseUrl()}/devices/pairing/request/`,
+      `${API_BASE_URL}/devices/pairing/request/`,
       {
         method:
           "POST",
@@ -130,7 +125,7 @@ export async function claimPairing(
 
   const response =
     await fetch(
-      `${getApiBaseUrl()}/devices/pairing/claim/`,
+      `${API_BASE_URL}/devices/pairing/claim/`,
       {
         method:
           "POST",

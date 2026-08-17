@@ -1,5 +1,6 @@
-const API_BASE =
-  `http://${window.location.hostname}:8000/api`;
+import {
+  API_BASE_URL,
+} from "../config/environment";
 
 
 export interface User {
@@ -7,10 +8,6 @@ export interface User {
   username: string;
   email: string;
 }
-
-
-let csrfToken:
-  string | null = null;
 
 
 async function readResponse(
@@ -36,24 +33,30 @@ async function readResponse(
 
 
   throw new Error(
-    `Server returned ${response.status}: ${text.slice(0, 200)}`
+    `Server returned ${response.status}: ${text.slice(0, 250)}`
   );
 }
 
 
+/* =========================================================
+   CSRF
+   ========================================================= */
+
 export async function getCsrfToken():
   Promise<string> {
 
-  if (csrfToken) {
-    return csrfToken;
-  }
-
-
   const response =
     await fetch(
-      `${API_BASE}/auth/csrf/`,
+      `${API_BASE_URL}/auth/csrf/`,
       {
-        credentials: "include",
+        method:
+          "GET",
+
+        credentials:
+          "include",
+
+        cache:
+          "no-store",
       }
     );
 
@@ -72,27 +75,48 @@ export async function getCsrfToken():
   }
 
 
-  csrfToken =
-    data.csrfToken;
+  if (!data.csrfToken) {
+    throw new Error(
+      "CSRF token was not returned by the server."
+    );
+  }
 
 
-  return csrfToken;
+  return data.csrfToken;
 }
 
+
+/* =========================================================
+   GENERIC AUTH POST
+   ========================================================= */
 
 async function authPost(
   path: string,
   body?: object,
 ) {
+  /*
+   * IMPORTANT:
+   *
+   * On récupère volontairement
+   * un NOUVEAU token CSRF avant
+   * chaque POST.
+   *
+   * Django peut renouveler le
+   * token CSRF après login.
+   *
+   * On évite donc de conserver
+   * l'ancien token en mémoire.
+   */
   const csrf =
     await getCsrfToken();
 
 
   const response =
     await fetch(
-      `${API_BASE}${path}`,
+      `${API_BASE_URL}${path}`,
       {
-        method: "POST",
+        method:
+          "POST",
 
         credentials:
           "include",
@@ -131,6 +155,10 @@ async function authPost(
 }
 
 
+/* =========================================================
+   REGISTER
+   ========================================================= */
+
 export async function register(
   username: string,
   email: string,
@@ -147,6 +175,10 @@ export async function register(
 }
 
 
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
 export async function login(
   username: string,
   password: string,
@@ -161,6 +193,10 @@ export async function login(
 }
 
 
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
 export async function logout() {
   return authPost(
     "/auth/logout/"
@@ -168,15 +204,25 @@ export async function logout() {
 }
 
 
+/* =========================================================
+   CURRENT USER
+   ========================================================= */
+
 export async function getCurrentUser():
   Promise<User | null> {
 
   const response =
     await fetch(
-      `${API_BASE}/auth/me/`,
+      `${API_BASE_URL}/auth/me/`,
       {
+        method:
+          "GET",
+
         credentials:
           "include",
+
+        cache:
+          "no-store",
       }
     );
 

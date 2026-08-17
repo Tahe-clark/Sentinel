@@ -1,3 +1,8 @@
+import {
+  WS_BASE_URL,
+} from "../config/environment";
+
+
 export type SignalingRole =
   "dashboard" |
   "emitter";
@@ -6,19 +11,8 @@ export type SignalingRole =
 export function createSignalingSocket(
   role: SignalingRole = "dashboard"
 ) {
-  const host =
-    window.location.hostname;
-
-
-  const protocol =
-    window.location.protocol ===
-    "https:"
-      ? "wss"
-      : "ws";
-
-
   const wsUrl =
-    `${protocol}://${host}:8000/ws/signaling/${role}/`;
+    `${WS_BASE_URL}/ws/signaling/${role}/`;
 
 
   console.log(

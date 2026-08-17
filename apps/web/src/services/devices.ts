@@ -1,19 +1,14 @@
 import {
+  API_BASE_URL,
+} from "../config/environment";
+
+import {
   getCsrfToken,
 } from "./auth";
 
 import type {
   Device,
 } from "../types/device";
-
-
-function getApiBaseUrl() {
-  const host =
-    window.location.hostname;
-
-
-  return `http://${host}:8000/api`;
-}
 
 
 async function readResponse(
@@ -49,7 +44,7 @@ export async function getDevices():
 
   const response =
     await fetch(
-      `${getApiBaseUrl()}/devices/`,
+      `${API_BASE_URL}/devices/`,
       {
         credentials:
           "include",
@@ -84,7 +79,7 @@ export async function unpairDevice(
 
   const response =
     await fetch(
-      `${getApiBaseUrl()}/devices/${encodeURIComponent(deviceKey)}/unpair/`,
+      `${API_BASE_URL}/devices/${encodeURIComponent(deviceKey)}/unpair/`,
       {
         method:
           "POST",
@@ -133,7 +128,7 @@ export async function deleteDevice(
 
   const response =
     await fetch(
-      `${getApiBaseUrl()}/devices/${encodeURIComponent(deviceKey)}/`,
+      `${API_BASE_URL}/devices/${encodeURIComponent(deviceKey)}/`,
       {
         method:
           "DELETE",
