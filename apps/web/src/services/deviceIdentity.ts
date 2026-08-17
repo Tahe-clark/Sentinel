@@ -69,37 +69,57 @@ function generateDefaultDeviceName():
 }
 
 
+function generateDeviceToken():
+  string {
+
+  const bytes =
+    new Uint8Array(32);
+
+
+  crypto.getRandomValues(
+    bytes
+  );
+
+
+  return Array.from(
+    bytes,
+    (byte) =>
+      byte
+        .toString(16)
+        .padStart(2, "0")
+  ).join("");
+}
+
+
+export function getDeviceToken():
+  string {
+
+  let token =
+    localStorage.getItem(
+      DEVICE_TOKEN_KEY
+    );
+
+
+  if (!token) {
+    token =
+      generateDeviceToken();
+
+    localStorage.setItem(
+      DEVICE_TOKEN_KEY,
+      token
+    );
+  }
+
+
+  return token;
+}
+
+
 export function setDeviceName(
   name: string
 ) {
   localStorage.setItem(
     DEVICE_NAME_KEY,
     name
-  );
-}
-
-
-export function getDeviceToken():
-  string | null {
-
-  return localStorage.getItem(
-    DEVICE_TOKEN_KEY
-  );
-}
-
-
-export function setDeviceToken(
-  token: string
-) {
-  localStorage.setItem(
-    DEVICE_TOKEN_KEY,
-    token
-  );
-}
-
-
-export function clearDeviceToken() {
-  localStorage.removeItem(
-    DEVICE_TOKEN_KEY
   );
 }
