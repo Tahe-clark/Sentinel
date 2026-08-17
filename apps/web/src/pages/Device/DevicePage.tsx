@@ -17,6 +17,10 @@ import {
   createSignalingSocket,
 } from "../../services/signaling";
 
+import {
+  createConfiguredPeerConnection,
+} from "../../services/webrtc";
+
 
 function DevicePage() {
   const {
@@ -106,161 +110,270 @@ function DevicePage() {
     }
 
 
-    const socket =
-      createSignalingSocket();
+    let disposed = false;
+    let reconnectTimer:
+      number | undefined;
+    let reconnectAttempt = 0;
 
 
-    socketRef.current =
-      socket;
+    function scheduleReconnect() {
+      if (disposed) {
+        return;
+      }
 
 
-    socket.onopen = () => {
-      requestCamera();
-    };
+      const delay = Math.min(
+        1000 *
+        2 ** reconnectAttempt,
+        10000
+      );
 
 
-    socket.onmessage =
-      async (event) => {
-        const data =
-          JSON.parse(
-            event.data
-          );
+      reconnectAttempt += 1;
 
 
-        console.log(
-          "Viewer received:",
-          data
+      setStatus(
+        "Reconnecting signaling..."
+      );
+
+
+      reconnectTimer =
+        window.setTimeout(
+          connectSocket,
+          delay
         );
+    }
 
 
-        if (
-          data.type ===
-            "camera_ready" &&
-          data.device_id ===
-            deviceId
-        ) {
-          requestCamera();
-
-          return;
-        }
+    function connectSocket() {
+      if (disposed) {
+        return;
+      }
 
 
-        if (
-          data.type ===
-            "webrtc_offer" &&
-          data.target_viewer_id ===
-            viewerIdRef.current
-        ) {
-          await handleOffer(
-            data.offer
-          );
-
-          return;
-        }
+      const existing =
+        socketRef.current;
 
 
-        if (
-          data.type ===
-            "ice_candidate" &&
-          data.target_viewer_id ===
-            viewerIdRef.current
-        ) {
-          await handleRemoteIceCandidate(
-            data.candidate
-          );
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-            "camera_unavailable" &&
-          data.target_viewer_id ===
-            viewerIdRef.current
-        ) {
-          setStatus(
-            "Camera unavailable"
-          );
-
-          return;
-        }
+      if (
+        existing &&
+        (
+          existing.readyState ===
+            WebSocket.OPEN ||
+          existing.readyState ===
+            WebSocket.CONNECTING
+        )
+      ) {
+        return;
+      }
 
 
-        if (
-          data.type ===
-            "camera_stopped" &&
-          data.device_id ===
-            deviceId
-        ) {
-          peerConnectionRef.current
-            ?.close();
+      const socket =
+        createSignalingSocket();
 
 
-          peerConnectionRef.current =
-            null;
+      socketRef.current =
+        socket;
 
 
-          remoteStreamRef.current =
-            null;
+      socket.onopen = () => {
+        reconnectAttempt = 0;
 
 
-          pendingIceCandidatesRef.current =
-            [];
-
-
-          if (
-            videoRef.current
-          ) {
-            videoRef.current.srcObject =
-              null;
-          }
-
-
-          setStatus(
-            "Camera stopped"
-          );
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "authorization_error"
-        ) {
-          setStatus(
-            data.message ??
-            "Unauthorized"
-          );
-        }
+        requestCamera();
       };
 
 
-    socket.onerror = (
-      error
-    ) => {
-      console.error(
-        "Viewer WebSocket error:",
+      socket.onmessage =
+        async (event) => {
+          const data =
+            JSON.parse(
+              event.data
+            );
+
+
+          console.log(
+            "Viewer received:",
+            data
+          );
+
+
+          if (
+            data.type ===
+              "camera_ready" &&
+            data.device_id ===
+              deviceId
+          ) {
+            requestCamera();
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "webrtc_offer" &&
+            data.target_viewer_id ===
+              viewerIdRef.current
+          ) {
+            await handleOffer(
+              data.offer
+            );
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "ice_candidate" &&
+            data.target_viewer_id ===
+              viewerIdRef.current
+          ) {
+            await handleRemoteIceCandidate(
+              data.candidate
+            );
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "camera_unavailable" &&
+            data.target_viewer_id ===
+              viewerIdRef.current
+          ) {
+            setStatus(
+              "Camera unavailable"
+            );
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "camera_stopped" &&
+            data.device_id ===
+              deviceId
+          ) {
+            peerConnectionRef.current
+              ?.close();
+
+
+            peerConnectionRef.current =
+              null;
+
+
+            remoteStreamRef.current =
+              null;
+
+
+            pendingIceCandidatesRef.current =
+              [];
+
+
+            if (
+              videoRef.current
+            ) {
+              videoRef.current.srcObject =
+                null;
+            }
+
+
+            setStatus(
+              "Camera stopped"
+            );
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+            "authorization_error"
+          ) {
+            setStatus(
+              data.message ??
+              "Unauthorized"
+            );
+          }
+        };
+
+
+      socket.onerror = (
         error
-      );
+      ) => {
+        console.error(
+          "Viewer WebSocket error:",
+          error
+        );
+      };
 
 
-      setStatus(
-        "Signaling error"
-      );
-    };
+      socket.onclose = () => {
+        if (
+          socketRef.current ===
+          socket
+        ) {
+          socketRef.current =
+            null;
+        }
 
 
-    socket.onclose = () => {
-      setStatus(
-        "Signaling disconnected"
-      );
-    };
+        if (!disposed) {
+          setStatus(
+            "Signaling disconnected"
+          );
+
+
+          scheduleReconnect();
+        }
+      };
+    }
+
+
+    function handleOnline() {
+      connectSocket();
+    }
+
+
+    connectSocket();
+
+
+    window.addEventListener(
+      "online",
+      handleOnline
+    );
 
 
     return () => {
-      socket.close();
+      disposed = true;
+
+
+      if (
+        reconnectTimer !==
+        undefined
+      ) {
+        window.clearTimeout(
+          reconnectTimer
+        );
+      }
+
+
+      window.removeEventListener(
+        "online",
+        handleOnline
+      );
+
+
+      socketRef.current
+        ?.close();
+
+
+      socketRef.current =
+        null;
 
 
       peerConnectionRef.current
@@ -277,7 +390,6 @@ function DevicePage() {
       }
     };
   }, [deviceId]);
-
 
   useEffect(() => {
     if (!recording) {
@@ -426,15 +538,55 @@ function DevicePage() {
   }
 
 
-  function createPeerConnection() {
+  async function createPeerConnection() {
     const peerConnection =
-      new RTCPeerConnection({
-        iceServers: [
-          {
-            urls:
-              "stun:stun.l.google.com:19302",
+      await createConfiguredPeerConnection({
+        onIceCandidate:
+          (candidate) => {
+            const socket =
+              socketRef.current;
+
+
+            if (
+              !socket ||
+              socket.readyState !==
+                WebSocket.OPEN
+            ) {
+              return;
+            }
+
+
+            socket.send(
+              JSON.stringify({
+                type:
+                  "ice_candidate",
+
+                viewer_id:
+                  viewerIdRef.current,
+
+                target_device_id:
+                  deviceId,
+
+                candidate:
+                  candidate.toJSON(),
+              })
+            );
           },
-        ],
+
+        onConnectionStateChange:
+          (state) => {
+            setStatus(
+              state
+            );
+          },
+
+        onIceConnectionStateChange:
+          (state) => {
+            console.log(
+              "Viewer ICE state:",
+              state
+            );
+          },
       });
 
 
@@ -474,46 +626,8 @@ function DevicePage() {
       };
 
 
-    peerConnection.onicecandidate =
-      (event) => {
-        if (
-          !event.candidate
-        ) {
-          return;
-        }
-
-
-        socketRef.current?.send(
-          JSON.stringify({
-            type:
-              "ice_candidate",
-
-            viewer_id:
-              viewerIdRef.current,
-
-            target_device_id:
-              deviceId,
-
-            candidate:
-              event.candidate
-                .toJSON(),
-          })
-        );
-      };
-
-
-    peerConnection.onconnectionstatechange =
-      () => {
-        setStatus(
-          peerConnection
-            .connectionState
-        );
-      };
-
-
     return peerConnection;
   }
-
 
   async function handleOffer(
     offer:
@@ -528,7 +642,7 @@ function DevicePage() {
 
 
     const peerConnection =
-      createPeerConnection();
+      await createPeerConnection();
 
 
     peerConnectionRef.current =

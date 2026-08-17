@@ -9,6 +9,10 @@ import {
 } from "../../services/signaling";
 
 import {
+  createConfiguredPeerConnection,
+} from "../../services/webrtc";
+
+import {
   getDeviceIdentity,
   getDeviceToken,
   setDeviceName,
@@ -105,281 +109,411 @@ function EmitterPage() {
 
 
   useEffect(() => {
-    const socket =
-      createSignalingSocket(
-        "emitter"
+    let disposed = false;
+    let reconnectTimer:
+      number | undefined;
+    let reconnectAttempt = 0;
+
+
+    function scheduleReconnect() {
+      if (disposed) {
+        return;
+      }
+
+
+      const delay = Math.min(
+        1000 *
+        2 ** reconnectAttempt,
+        10000
       );
 
 
-    socketRef.current =
-      socket;
+      reconnectAttempt += 1;
 
 
-    socket.onopen = () => {
-      console.log(
-        "Emitter connected"
+      setConnectionStatus(
+        "Reconnecting signaling..."
       );
 
 
-      sendDeviceOnline(
-        socket,
-        getDeviceToken(),
-        DEVICE.name
-      );
-    };
+      reconnectTimer =
+        window.setTimeout(
+          connectSocket,
+          delay
+        );
+    }
 
 
-    socket.onmessage =
-      async (event) => {
-        const data =
-          JSON.parse(
-            event.data
-          );
+    function connectSocket() {
+      if (disposed) {
+        return;
+      }
 
 
+      const existing =
+        socketRef.current;
+
+
+      if (
+        existing &&
+        (
+          existing.readyState ===
+            WebSocket.OPEN ||
+          existing.readyState ===
+            WebSocket.CONNECTING
+        )
+      ) {
+        return;
+      }
+
+
+      const socket =
+        createSignalingSocket(
+          "emitter"
+        );
+
+
+      socketRef.current =
+        socket;
+
+
+      socket.onopen = () => {
         console.log(
-          "Emitter received:",
-          data
+          "Emitter connected"
+        );
+
+
+        reconnectAttempt = 0;
+
+
+        const currentIdentity =
+          getDeviceIdentity();
+
+
+        sendDeviceOnline(
+          socket,
+          getDeviceToken(),
+          currentIdentity.name
         );
 
 
         if (
-          data.type ===
-          "device_authenticated"
+          streamRef.current
         ) {
-          setPaired(
-            Boolean(
-              data.paired
-            )
-          );
-
-
-          setOwner(
-            data.owner ??
-            null
-          );
-
-
-          setConnectionStatus(
-            "Ready"
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "device_authentication_error"
-        ) {
-          console.error(
-            data.message
-          );
-
-
-          setConnectionStatus(
-            "Authentication failed"
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "pairing_completed"
-        ) {
-          setPaired(
-            true
-          );
-
-
-          setOwner(
-            data.owner ??
-            null
-          );
-
-
-          setPairingCode(
-            null
-          );
-
-
-          setPairingExpiresAt(
-            null
-          );
-
-
-          setPairingMessage(
-            "Device paired successfully."
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "device_unpaired"
-        ) {
-          setPaired(
-            false
-          );
-
-
-          setOwner(
-            null
-          );
-
-
-          setPairingCode(
-            null
-          );
-
-
-          setPairingExpiresAt(
-            null
-          );
-
-
-          setPairingMessage(
-            "This device has been unpaired. You can pair it with another Sentinel account."
-          );
-
-
-          peerConnectionRef.current
-            ?.close();
-
-
-          peerConnectionRef.current =
-            null;
-
-
-          setConnectionStatus(
-            "Unpaired"
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "device_deleted"
-        ) {
-          setPaired(
-            false
-          );
-
-
-          setOwner(
-            null
-          );
-
-
-          setPairingCode(
-            null
-          );
-
-
-          setPairingExpiresAt(
-            null
-          );
-
-
-          setPairingMessage(
-            "Device deleted. You can pair it again."
-          );
-
-
-          peerConnectionRef.current
-            ?.close();
-
-
-          peerConnectionRef.current =
-            null;
-
-
-          setConnectionStatus(
-            "Device deleted"
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-          "watch_device" &&
-          data.target_device_id ===
-          DEVICE.id
-        ) {
-          await handleWatchRequest(
-            data.viewer_id
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-            "webrtc_answer" &&
-          data.target_device_id ===
-            DEVICE.id
-        ) {
-          await handleAnswer(
-            data.answer
-          );
-
-
-          return;
-        }
-
-
-        if (
-          data.type ===
-            "ice_candidate" &&
-          data.target_device_id ===
-            DEVICE.id
-        ) {
-          await handleRemoteIceCandidate(
-            data.candidate
+          socket.send(
+            JSON.stringify({
+              type:
+                "camera_ready",
+
+              device_id:
+                DEVICE.id,
+            })
           );
         }
       };
 
 
-    socket.onerror = (
-      error
-    ) => {
-      console.error(
-        "WebSocket error:",
+      socket.onmessage =
+        async (event) => {
+          const data =
+            JSON.parse(
+              event.data
+            );
+
+
+          console.log(
+            "Emitter received:",
+            data
+          );
+
+
+          if (
+            data.type ===
+            "device_authenticated"
+          ) {
+            setPaired(
+              Boolean(
+                data.paired
+              )
+            );
+
+
+            setOwner(
+              data.owner ??
+              null
+            );
+
+
+            setConnectionStatus(
+              streamRef.current
+                ? "Camera active"
+                : "Ready"
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+            "device_authentication_error"
+          ) {
+            console.error(
+              data.message
+            );
+
+
+            setConnectionStatus(
+              "Authentication failed"
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+            "pairing_completed"
+          ) {
+            setPaired(
+              true
+            );
+
+
+            setOwner(
+              data.owner ??
+              null
+            );
+
+
+            setPairingCode(
+              null
+            );
+
+
+            setPairingExpiresAt(
+              null
+            );
+
+
+            setPairingMessage(
+              "Device paired successfully."
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+            "device_unpaired"
+          ) {
+            setPaired(
+              false
+            );
+
+
+            setOwner(
+              null
+            );
+
+
+            setPairingCode(
+              null
+            );
+
+
+            setPairingExpiresAt(
+              null
+            );
+
+
+            setPairingMessage(
+              "This device has been unpaired. You can pair it with another Sentinel account."
+            );
+
+
+            peerConnectionRef.current
+              ?.close();
+
+
+            peerConnectionRef.current =
+              null;
+
+
+            setConnectionStatus(
+              "Unpaired"
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+            "device_deleted"
+          ) {
+            setPaired(
+              false
+            );
+
+
+            setOwner(
+              null
+            );
+
+
+            setPairingCode(
+              null
+            );
+
+
+            setPairingExpiresAt(
+              null
+            );
+
+
+            setPairingMessage(
+              "Device deleted. You can pair it again."
+            );
+
+
+            peerConnectionRef.current
+              ?.close();
+
+
+            peerConnectionRef.current =
+              null;
+
+
+            setConnectionStatus(
+              "Device deleted"
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "watch_device" &&
+            data.target_device_id ===
+              DEVICE.id
+          ) {
+            await handleWatchRequest(
+              data.viewer_id
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "webrtc_answer" &&
+            data.target_device_id ===
+              DEVICE.id
+          ) {
+            await handleAnswer(
+              data.answer
+            );
+
+
+            return;
+          }
+
+
+          if (
+            data.type ===
+              "ice_candidate" &&
+            data.target_device_id ===
+              DEVICE.id
+          ) {
+            await handleRemoteIceCandidate(
+              data.candidate
+            );
+          }
+        };
+
+
+      socket.onerror = (
         error
-      );
+      ) => {
+        console.error(
+          "Emitter WebSocket error:",
+          error
+        );
+      };
 
 
-      setConnectionStatus(
-        "Signaling error"
-      );
-    };
+      socket.onclose = () => {
+        if (
+          socketRef.current ===
+          socket
+        ) {
+          socketRef.current =
+            null;
+        }
 
 
-    socket.onclose = () => {
-      setConnectionStatus(
-        "Signaling disconnected"
-      );
-    };
+        if (!disposed) {
+          setConnectionStatus(
+            "Signaling disconnected"
+          );
+
+
+          scheduleReconnect();
+        }
+      };
+    }
+
+
+    function handleOnline() {
+      connectSocket();
+    }
+
+
+    connectSocket();
+
+
+    window.addEventListener(
+      "online",
+      handleOnline
+    );
 
 
     return () => {
-      socket.close();
+      disposed = true;
+
+
+      if (
+        reconnectTimer !==
+        undefined
+      ) {
+        window.clearTimeout(
+          reconnectTimer
+        );
+      }
+
+
+      window.removeEventListener(
+        "online",
+        handleOnline
+      );
+
+
+      socketRef.current
+        ?.close();
+
+
+      socketRef.current =
+        null;
 
 
       peerConnectionRef.current
@@ -395,7 +529,6 @@ function EmitterPage() {
         );
     };
   }, []);
-
 
   function sendDeviceOnline(
     socket: WebSocket,
@@ -722,7 +855,7 @@ function EmitterPage() {
 
 
     const peerConnection =
-      createPeerConnection(
+      await createPeerConnection(
         viewerId
       );
 
@@ -777,59 +910,62 @@ function EmitterPage() {
   }
 
 
-  function createPeerConnection(
+  async function createPeerConnection(
     viewerId: string
   ) {
     const peerConnection =
-      new RTCPeerConnection({
-        iceServers: [
-          {
-            urls:
-              "stun:stun.l.google.com:19302",
+      await createConfiguredPeerConnection({
+        onIceCandidate:
+          (candidate) => {
+            const socket =
+              socketRef.current;
+
+
+            if (
+              !socket ||
+              socket.readyState !==
+                WebSocket.OPEN
+            ) {
+              return;
+            }
+
+
+            socket.send(
+              JSON.stringify({
+                type:
+                  "ice_candidate",
+
+                device_id:
+                  DEVICE.id,
+
+                target_viewer_id:
+                  viewerId,
+
+                candidate:
+                  candidate.toJSON(),
+              })
+            );
           },
-        ],
+
+        onConnectionStateChange:
+          (state) => {
+            setConnectionStatus(
+              state
+            );
+          },
+
+        onIceConnectionStateChange:
+          (state) => {
+            console.log(
+              "Emitter ICE state:",
+              state
+            );
+          },
       });
-
-
-    peerConnection.onicecandidate =
-      (event) => {
-        if (
-          !event.candidate
-        ) {
-          return;
-        }
-
-
-        socketRef.current?.send(
-          JSON.stringify({
-            type:
-              "ice_candidate",
-
-            device_id:
-              DEVICE.id,
-
-            target_viewer_id:
-              viewerId,
-
-            candidate:
-              event.candidate.toJSON(),
-          })
-        );
-      };
-
-
-    peerConnection.onconnectionstatechange =
-      () => {
-        setConnectionStatus(
-          peerConnection
-            .connectionState
-        );
-      };
 
 
     return peerConnection;
   }
-
 
   async function handleAnswer(
     answer:
@@ -874,12 +1010,8 @@ function EmitterPage() {
       peerConnectionRef.current;
 
 
-    if (!peerConnection) {
-      return;
-    }
-
-
     if (
+      !peerConnection ||
       !peerConnection
         .remoteDescription
     ) {
