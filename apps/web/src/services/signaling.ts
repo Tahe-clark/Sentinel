@@ -2,6 +2,10 @@ import {
   WS_BASE_URL,
 } from "../config/environment";
 
+import {
+  getSessionToken,
+} from "./auth";
+
 
 export type SignalingRole =
   "dashboard" |
@@ -11,13 +15,29 @@ export type SignalingRole =
 export function createSignalingSocket(
   role: SignalingRole = "dashboard"
 ) {
-  const wsUrl =
+  let wsUrl =
     `${WS_BASE_URL}/ws/signaling/${role}/`;
+
+
+  if (
+    role === "dashboard"
+  ) {
+    const token =
+      getSessionToken();
+
+
+    if (token) {
+      wsUrl +=
+        `?token=${encodeURIComponent(
+          token
+        )}`;
+    }
+  }
 
 
   console.log(
     "Opening signaling socket:",
-    wsUrl
+    `${WS_BASE_URL}/ws/signaling/${role}/`
   );
 
 

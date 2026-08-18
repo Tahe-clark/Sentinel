@@ -10,6 +10,36 @@ export interface User {
 }
 
 
+const SESSION_TOKEN_KEY =
+  "sentinel_session_token";
+
+
+export function getSessionToken():
+  string | null {
+
+  return localStorage.getItem(
+    SESSION_TOKEN_KEY
+  );
+}
+
+
+function saveSessionToken(
+  token: string
+) {
+  localStorage.setItem(
+    SESSION_TOKEN_KEY,
+    token
+  );
+}
+
+
+export function clearSessionToken() {
+  localStorage.removeItem(
+    SESSION_TOKEN_KEY
+  );
+}
+
+
 async function readResponse(
   response: Response
 ) {
@@ -38,77 +68,33 @@ async function readResponse(
 }
 
 
-/* =========================================================
-   CSRF
-   ========================================================= */
-
-export async function getCsrfToken():
-  Promise<string> {
-
-  const response =
-    await fetch(
-      `${API_BASE_URL}/auth/csrf/`,
-      {
-        method:
-          "GET",
-
-        credentials:
-          "include",
-
-        cache:
-          "no-store",
-      }
-    );
-
-
-  const data =
-    await readResponse(
-      response
-    );
-
-
-  if (!response.ok) {
-    throw new Error(
-      data.error ??
-      "Unable to obtain CSRF token."
-    );
-  }
-
-
-  if (!data.csrfToken) {
-    throw new Error(
-      "CSRF token was not returned by the server."
-    );
-  }
-
-
-  return data.csrfToken;
-}
-
-
-/* =========================================================
-   GENERIC AUTH POST
-   ========================================================= */
-
-async function authPost(
+async function apiPost(
   path: string,
   body?: object,
+  authenticated = false,
 ) {
-  /*
-   * IMPORTANT:
-   *
-   * On récupère volontairement
-   * un NOUVEAU token CSRF avant
-   * chaque POST.
-   *
-   * Django peut renouveler le
-   * token CSRF après login.
-   *
-   * On évite donc de conserver
-   * l'ancien token en mémoire.
-   */
-  const csrf =
-    await getCsrfToken();
+  const headers:
+    Record<string, string> = {
+      "Content-Type":
+        "application/json",
+    };
+
+
+  if (authenticated) {
+    const token =
+      getSessionToken();
+
+
+    if (!token) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+
+    headers.Authorization =
+      `Session ${token}`;
+  }
 
 
   const response =
@@ -118,16 +104,7 @@ async function authPost(
         method:
           "POST",
 
-        credentials:
-          "include",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "X-CSRFToken":
-            csrf,
-        },
+        headers,
 
         body:
           JSON.stringify(
@@ -155,61 +132,83 @@ async function authPost(
 }
 
 
-/* =========================================================
-   REGISTER
-   ========================================================= */
-
 export async function register(
   username: string,
   email: string,
   password: string,
 ) {
-  return authPost(
-    "/auth/register/",
-    {
-      username,
-      email,
-      password,
-    }
-  );
+  const data =
+    await apiPost(
+      "/auth/register/",
+      {
+        username,
+        email,
+        password,
+      }
+    );
+
+
+  if (data.token) {
+    saveSessionToken(
+      data.token
+    );
+  }
+
+
+  return data;
 }
 
-
-/* =========================================================
-   LOGIN
-   ========================================================= */
 
 export async function login(
-  username: string,
+  identifier: string,
   password: string,
 ) {
-  return authPost(
-    "/auth/login/",
-    {
-      username,
-      password,
-    }
-  );
+  const data =
+    await apiPost(
+      "/auth/login/",
+      {
+        identifier,
+        password,
+      }
+    );
+
+
+  if (data.token) {
+    saveSessionToken(
+      data.token
+    );
+  }
+
+
+  return data;
 }
 
-
-/* =========================================================
-   LOGOUT
-   ========================================================= */
 
 export async function logout() {
-  return authPost(
-    "/auth/logout/"
-  );
+  try {
+    await apiPost(
+      "/auth/logout/",
+      {},
+      true,
+    );
+
+  } finally {
+    clearSessionToken();
+  }
 }
 
-
-/* =========================================================
-   CURRENT USER
-   ========================================================= */
 
 export async function getCurrentUser():
   Promise<User | null> {
+
+  const token =
+    getSessionToken();
+
+
+  if (!token) {
+    return null;
+  }
+
 
   const response =
     await fetch(
@@ -218,8 +217,10 @@ export async function getCurrentUser():
         method:
           "GET",
 
-        credentials:
-          "include",
+        headers: {
+          Authorization:
+            `Session ${token}`,
+        },
 
         cache:
           "no-store",
@@ -230,6 +231,8 @@ export async function getCurrentUser():
   if (
     response.status === 401
   ) {
+    clearSessionToken();
+
     return null;
   }
 
@@ -249,4 +252,49 @@ export async function getCurrentUser():
 
 
   return data.user;
+}
+
+
+export async function forgotPassword(
+  email: string,
+) {
+  return apiPost(
+    "/auth/forgot-password/",
+    {
+      email,
+    }
+  );
+}
+
+
+export async function resetPassword(
+  uid: string,
+  token: string,
+  password: string,
+) {
+  return apiPost(
+    `/auth/reset-password/${encodeURIComponent(uid)}/${encodeURIComponent(token)}/`,
+    {
+      password,
+    }
+  );
+}
+
+
+export function getAuthHeaders():
+  Record<string, string> {
+
+  const token =
+    getSessionToken();
+
+
+  if (!token) {
+    return {};
+  }
+
+
+  return {
+    Authorization:
+      `Session ${token}`,
+  };
 }

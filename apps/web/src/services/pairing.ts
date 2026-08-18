@@ -3,7 +3,7 @@ import {
 } from "../config/environment";
 
 import {
-  getCsrfToken,
+  getAuthHeaders,
 } from "./auth";
 
 
@@ -61,10 +61,6 @@ export async function requestPairing(
   deviceToken: string,
 ): Promise<PairingRequestResponse> {
 
-  const csrf =
-    await getCsrfToken();
-
-
   const response =
     await fetch(
       `${API_BASE_URL}/devices/pairing/request/`,
@@ -72,15 +68,9 @@ export async function requestPairing(
         method:
           "POST",
 
-        credentials:
-          "include",
-
         headers: {
           "Content-Type":
             "application/json",
-
-          "X-CSRFToken":
-            csrf,
         },
 
         body:
@@ -119,10 +109,6 @@ export async function requestPairing(
 export async function claimPairing(
   code: string,
 ) {
-  const csrf =
-    await getCsrfToken();
-
-
   const response =
     await fetch(
       `${API_BASE_URL}/devices/pairing/claim/`,
@@ -130,15 +116,11 @@ export async function claimPairing(
         method:
           "POST",
 
-        credentials:
-          "include",
-
         headers: {
           "Content-Type":
             "application/json",
 
-          "X-CSRFToken":
-            csrf,
+          ...getAuthHeaders(),
         },
 
         body:

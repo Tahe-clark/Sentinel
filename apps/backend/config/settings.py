@@ -476,7 +476,39 @@ EMAIL_BACKEND = (
     "django.core.mail.backends.console.EmailBackend"
 )
 
+# =========================================================
+# AUTHENTICATION / SESSION SECURITY
+# =========================================================
 
+# Session Sentinel : 7 jours
+SESSION_COOKIE_AGE = int(
+    os.getenv(
+        "AUTH_TOKEN_AGE",
+        "604800",
+    )
+)
+
+# La session expire après cette durée.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Évite de prolonger automatiquement la session
+# à chaque requête.
+SESSION_SAVE_EVERY_REQUEST = False
+
+# Lien "mot de passe oublié" : 1 heure
+PASSWORD_RESET_TIMEOUT = int(
+    os.getenv(
+        "PASSWORD_RESET_TIMEOUT",
+        "3600",
+    )
+)
+
+# Pour l'instant False jusqu'à ce qu'on branche
+# un vrai service d'envoi d'emails.
+EMAIL_VERIFICATION_REQUIRED = env_bool(
+    "EMAIL_VERIFICATION_REQUIRED",
+    False,
+)
 # =========================================================
 # DEFAULT MODEL ID
 # =========================================================
@@ -484,3 +516,8 @@ EMAIL_BACKEND = (
 DEFAULT_AUTO_FIELD = (
     "django.db.models.BigAutoField"
 )
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.SessionTokenAuthentication",
+    ],
+}

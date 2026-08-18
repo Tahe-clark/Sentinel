@@ -3,7 +3,7 @@ import {
 } from "../config/environment";
 
 import {
-  getCsrfToken,
+  getAuthHeaders,
 } from "./auth";
 
 import type {
@@ -46,8 +46,9 @@ export async function getDevices():
     await fetch(
       `${API_BASE_URL}/devices/`,
       {
-        credentials:
-          "include",
+        headers: {
+          ...getAuthHeaders(),
+        },
       }
     );
 
@@ -73,10 +74,6 @@ export async function getDevices():
 export async function unpairDevice(
   deviceKey: string,
 ) {
-  const csrf =
-    await getCsrfToken();
-
-
   const response =
     await fetch(
       `${API_BASE_URL}/devices/${encodeURIComponent(deviceKey)}/unpair/`,
@@ -84,15 +81,11 @@ export async function unpairDevice(
         method:
           "POST",
 
-        credentials:
-          "include",
-
         headers: {
           "Content-Type":
             "application/json",
 
-          "X-CSRFToken":
-            csrf,
+          ...getAuthHeaders(),
         },
 
         body:
@@ -122,10 +115,6 @@ export async function unpairDevice(
 export async function deleteDevice(
   deviceKey: string,
 ) {
-  const csrf =
-    await getCsrfToken();
-
-
   const response =
     await fetch(
       `${API_BASE_URL}/devices/${encodeURIComponent(deviceKey)}/`,
@@ -133,12 +122,8 @@ export async function deleteDevice(
         method:
           "DELETE",
 
-        credentials:
-          "include",
-
         headers: {
-          "X-CSRFToken":
-            csrf,
+          ...getAuthHeaders(),
         },
       }
     );
