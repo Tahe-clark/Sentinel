@@ -4,6 +4,7 @@ from channels.routing import (
     ProtocolTypeRouter,
     URLRouter,
 )
+
 from channels.security.websocket import (
     OriginValidator,
 )
@@ -33,6 +34,21 @@ from signaling.routing import (
 )
 
 
+def env_list(
+    name: str,
+) -> list[str]:
+    value = os.getenv(
+        name,
+        "",
+    )
+
+    return [
+        item.strip()
+        for item in value.split(",")
+        if item.strip()
+    ]
+
+
 WEBSOCKET_ALLOWED_ORIGINS = [
     "https://sentinel-web-snowy.vercel.app",
 
@@ -43,6 +59,20 @@ WEBSOCKET_ALLOWED_ORIGINS = [
     "http://192.168.137.1:5173",
     "http://10.0.0.245:5173",
 ]
+
+
+WEBSOCKET_ALLOWED_ORIGINS.extend(
+    env_list(
+        "WEBSOCKET_ALLOWED_ORIGINS"
+    )
+)
+
+
+WEBSOCKET_ALLOWED_ORIGINS = list(
+    dict.fromkeys(
+        WEBSOCKET_ALLOWED_ORIGINS
+    )
+)
 
 
 application = ProtocolTypeRouter({
