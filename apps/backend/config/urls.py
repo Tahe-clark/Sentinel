@@ -35,4 +35,8 @@ urlpatterns = [
         "api/devices/",
         include("devices.urls"),
     ),
+    path(
+    "api/rtc/",
+    include("rtc.urls"),
+),
 ]

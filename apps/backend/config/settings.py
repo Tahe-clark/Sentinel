@@ -144,6 +144,7 @@ INSTALLED_APPS = [
     "devices",
     "signaling",
     "accounts",
+    "rtc",
 ]
 
 
