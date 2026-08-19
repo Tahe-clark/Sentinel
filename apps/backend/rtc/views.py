@@ -23,12 +23,26 @@ from accounts.authentication import (
 logger = logging.getLogger(__name__)
 
 
+# =========================================================
+# CLOUDFLARE CONFIGURATION
+# =========================================================
+
 CLOUDFLARE_TURN_ENDPOINT = (
     "https://rtc.live.cloudflare.com"
     "/v1/turn/keys/{key_id}"
     "/credentials/generate-ice-servers"
 )
 
+
+CLOUDFLARE_USER_AGENT = (
+    "Sentinel/1.0 "
+    "(WebRTC TURN Credential Service)"
+)
+
+
+# =========================================================
+# ICE SERVERS VIEW
+# =========================================================
 
 @api_view(["GET"])
 @authentication_classes([
@@ -41,12 +55,12 @@ def ice_servers_view(request):
     """
     Generate temporary Cloudflare TURN credentials.
 
-    The permanent Cloudflare secret stays on the
-    Django backend and is never sent to the browser.
+    The permanent Cloudflare TURN API token remains
+    exclusively on the Sentinel backend.
     """
 
     # =====================================================
-    # 1. READ ENVIRONMENT VARIABLES
+    # 1. ENVIRONMENT VARIABLES
     # =====================================================
 
     key_id = os.getenv(
@@ -72,7 +86,7 @@ def ice_servers_view(request):
         ttl = 86400
 
 
-    # Maximum: 48 hours
+    # Limit credentials to maximum 48 hours.
     ttl = max(
         60,
         min(
@@ -83,13 +97,14 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 2. VERIFY CONFIGURATION
+    # 2. CONFIGURATION VALIDATION
     # =====================================================
 
     if not key_id:
+
         logger.error(
-            "CLOUDFLARE TURN CONFIG ERROR: "
-            "CLOUDFLARE_TURN_KEY_ID is missing."
+            "CLOUDFLARE TURN CONFIG ERROR | "
+            "CLOUDFLARE_TURN_KEY_ID missing"
         )
 
         return JsonResponse(
@@ -102,9 +117,10 @@ def ice_servers_view(request):
 
 
     if not api_token:
+
         logger.error(
-            "CLOUDFLARE TURN CONFIG ERROR: "
-            "CLOUDFLARE_TURN_API_TOKEN is missing."
+            "CLOUDFLARE TURN CONFIG ERROR | "
+            "CLOUDFLARE_TURN_API_TOKEN missing"
         )
 
         return JsonResponse(
@@ -117,7 +133,7 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 3. BUILD CLOUDFLARE URL
+    # 3. CLOUDFLARE URL
     # =====================================================
 
     cloudflare_url = (
@@ -128,7 +144,7 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 4. BUILD REQUEST BODY
+    # 4. REQUEST PAYLOAD
     # =====================================================
 
     payload = json.dumps(
@@ -141,7 +157,7 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 5. BUILD HTTP REQUEST
+    # 5. CLOUDFLARE HTTP REQUEST
     # =====================================================
 
     cloudflare_request = urllib.request.Request(
@@ -160,15 +176,19 @@ def ice_servers_view(request):
 
             "Accept":
                 "application/json",
+
+            "User-Agent":
+                CLOUDFLARE_USER_AGENT,
         },
     )
 
 
     # =====================================================
-    # 6. CALL CLOUDFLARE
+    # 6. SEND REQUEST
     # =====================================================
 
     try:
+
         with urllib.request.urlopen(
             cloudflare_request,
             timeout=15,
@@ -188,23 +208,27 @@ def ice_servers_view(request):
 
 
         logger.info(
-            "CLOUDFLARE TURN RESPONSE STATUS: %s",
+            "CLOUDFLARE TURN RESPONSE | "
+            "status=%s",
             status_code,
         )
 
 
-        cloudflare_data = json.loads(
-            response_body
+        cloudflare_data = (
+            json.loads(
+                response_body
+            )
         )
 
 
     # =====================================================
-    # 7. CLOUDFLARE HTTP ERROR
+    # 7. HTTP ERROR
     # =====================================================
 
     except urllib.error.HTTPError as error:
 
         try:
+
             error_body = (
                 error
                 .read()
@@ -215,6 +239,7 @@ def ice_servers_view(request):
             )
 
         except Exception:
+
             error_body = (
                 "Unable to read "
                 "Cloudflare error body."
@@ -223,7 +248,9 @@ def ice_servers_view(request):
 
         logger.error(
             "CLOUDFLARE TURN HTTP ERROR | "
-            "status=%s | reason=%s | response=%s",
+            "status=%s | "
+            "reason=%s | "
+            "response=%s",
             error.code,
             error.reason,
             error_body[:1500],
@@ -240,13 +267,14 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 8. NETWORK / DNS ERROR
+    # 8. NETWORK ERROR
     # =====================================================
 
     except urllib.error.URLError as error:
 
         logger.error(
-            "CLOUDFLARE TURN URL ERROR | reason=%s",
+            "CLOUDFLARE TURN URL ERROR | "
+            "reason=%s",
             error.reason,
         )
 
@@ -325,11 +353,13 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 12. READ ICE SERVERS
+    # 12. GET ICE SERVERS
     # =====================================================
 
-    ice_servers = cloudflare_data.get(
-        "iceServers"
+    ice_servers = (
+        cloudflare_data.get(
+            "iceServers"
+        )
     )
 
 
@@ -342,8 +372,8 @@ def ice_servers_view(request):
     ):
 
         logger.error(
-            "CLOUDFLARE TURN INVALID RESPONSE: "
-            "iceServers is missing or empty."
+            "CLOUDFLARE TURN INVALID RESPONSE | "
+            "iceServers missing or empty"
         )
 
 
@@ -426,14 +456,14 @@ def ice_servers_view(request):
 
 
     # =====================================================
-    # 14. VERIFY CLEANED SERVERS
+    # 14. VALIDATE CLEANED SERVERS
     # =====================================================
 
     if not cleaned_servers:
 
         logger.error(
-            "CLOUDFLARE TURN INVALID RESPONSE: "
-            "No usable ICE servers remain."
+            "CLOUDFLARE TURN INVALID RESPONSE | "
+            "No usable ICE servers"
         )
 
 
@@ -453,9 +483,13 @@ def ice_servers_view(request):
 
     logger.info(
         "CLOUDFLARE TURN SUCCESS | "
-        "user_id=%s | servers=%s | ttl=%s",
+        "user_id=%s | "
+        "servers=%s | "
+        "ttl=%s",
         request.user.id,
-        len(cleaned_servers),
+        len(
+            cleaned_servers
+        ),
         ttl,
     )
 
