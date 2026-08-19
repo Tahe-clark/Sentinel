@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
@@ -19,6 +20,9 @@ from accounts.authentication import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 CLOUDFLARE_TURN_ENDPOINT = (
     "https://rtc.live.cloudflare.com"
     "/v1/turn/keys/{key_id}"
@@ -26,9 +30,7 @@ CLOUDFLARE_TURN_ENDPOINT = (
 )
 
 
-@api_view([
-    "GET",
-])
+@api_view(["GET"])
 @authentication_classes([
     SessionTokenAuthentication,
 ])
@@ -37,12 +39,15 @@ CLOUDFLARE_TURN_ENDPOINT = (
 ])
 def ice_servers_view(request):
     """
-    Generate short-lived Cloudflare TURN credentials.
+    Generate temporary Cloudflare TURN credentials.
 
-    The permanent Cloudflare TURN key stays only
-    on the backend. The browser receives only the
-    temporary ICE server configuration.
+    The permanent Cloudflare secret stays on the
+    Django backend and is never sent to the browser.
     """
+
+    # =====================================================
+    # 1. READ ENVIRONMENT VARIABLES
+    # =====================================================
 
     key_id = os.getenv(
         "CLOUDFLARE_TURN_KEY_ID",
@@ -67,10 +72,7 @@ def ice_servers_view(request):
         ttl = 86400
 
 
-    #
-    # Cloudflare currently allows TURN credentials
-    # for up to 48 hours.
-    #
+    # Maximum: 48 hours
     ttl = max(
         60,
         min(
@@ -80,8 +82,12 @@ def ice_servers_view(request):
     )
 
 
+    # =====================================================
+    # 2. VERIFY CONFIGURATION
+    # =====================================================
+
     if not key_id:
-        print(
+        logger.error(
             "CLOUDFLARE TURN CONFIG ERROR: "
             "CLOUDFLARE_TURN_KEY_ID is missing."
         )
@@ -96,7 +102,7 @@ def ice_servers_view(request):
 
 
     if not api_token:
-        print(
+        logger.error(
             "CLOUDFLARE TURN CONFIG ERROR: "
             "CLOUDFLARE_TURN_API_TOKEN is missing."
         )
@@ -110,45 +116,57 @@ def ice_servers_view(request):
         )
 
 
-    url = (
-        CLOUDFLARE_TURN_ENDPOINT
-        .format(
-            key_id=key_id
+    # =====================================================
+    # 3. BUILD CLOUDFLARE URL
+    # =====================================================
+
+    cloudflare_url = (
+        CLOUDFLARE_TURN_ENDPOINT.format(
+            key_id=key_id,
         )
     )
 
 
+    # =====================================================
+    # 4. BUILD REQUEST BODY
+    # =====================================================
+
     payload = json.dumps(
         {
-            "ttl":
-                ttl,
-
-            "customIdentifier":
-                f"sentinel-user-{request.user.id}",
+            "ttl": ttl,
         }
     ).encode(
         "utf-8"
     )
 
 
-    cloudflare_request = (
-        urllib.request.Request(
-            url,
-            data=payload,
-            method="POST",
-            headers={
-                "Authorization":
-                    f"Bearer {api_token}",
+    # =====================================================
+    # 5. BUILD HTTP REQUEST
+    # =====================================================
 
-                "Content-Type":
-                    "application/json",
+    cloudflare_request = urllib.request.Request(
+        cloudflare_url,
 
-                "Accept":
-                    "application/json",
-            },
-        )
+        data=payload,
+
+        method="POST",
+
+        headers={
+            "Authorization":
+                f"Bearer {api_token}",
+
+            "Content-Type":
+                "application/json",
+
+            "Accept":
+                "application/json",
+        },
     )
 
+
+    # =====================================================
+    # 6. CALL CLOUDFLARE
+    # =====================================================
 
     try:
         with urllib.request.urlopen(
@@ -169,35 +187,27 @@ def ice_servers_view(request):
             )
 
 
-        if status_code not in (
-            200,
-            201,
-        ):
-            print(
-                "CLOUDFLARE TURN UNEXPECTED STATUS:",
-                status_code,
-            )
-
-            return JsonResponse(
-                {
-                    "error":
-                        "Unable to obtain TURN credentials."
-                },
-                status=502,
-            )
-
-
-        cloudflare_data = (
-            json.loads(
-                response_body
-            )
+        logger.info(
+            "CLOUDFLARE TURN RESPONSE STATUS: %s",
+            status_code,
         )
 
 
+        cloudflare_data = json.loads(
+            response_body
+        )
+
+
+    # =====================================================
+    # 7. CLOUDFLARE HTTP ERROR
+    # =====================================================
+
     except urllib.error.HTTPError as error:
+
         try:
             error_body = (
-                error.read()
+                error
+                .read()
                 .decode(
                     "utf-8",
                     errors="replace",
@@ -206,30 +216,17 @@ def ice_servers_view(request):
 
         except Exception:
             error_body = (
-                "Unable to read Cloudflare "
-                "error response."
+                "Unable to read "
+                "Cloudflare error body."
             )
 
 
-        #
-        # IMPORTANT:
-        # We log Cloudflare's response, but we
-        # NEVER print api_token or Authorization.
-        #
-        print(
-            "CLOUDFLARE TURN HTTP ERROR:",
-            {
-                "status":
-                    error.code,
-
-                "reason":
-                    str(
-                        error.reason
-                    ),
-
-                "response":
-                    error_body[:1500],
-            }
+        logger.error(
+            "CLOUDFLARE TURN HTTP ERROR | "
+            "status=%s | reason=%s | response=%s",
+            error.code,
+            error.reason,
+            error_body[:1500],
         )
 
 
@@ -241,16 +238,16 @@ def ice_servers_view(request):
             status=502,
         )
 
+
+    # =====================================================
+    # 8. NETWORK / DNS ERROR
+    # =====================================================
 
     except urllib.error.URLError as error:
-        print(
-            "CLOUDFLARE TURN URL ERROR:",
-            {
-                "reason":
-                    str(
-                        error.reason
-                    ),
-            }
+
+        logger.error(
+            "CLOUDFLARE TURN URL ERROR | reason=%s",
+            error.reason,
         )
 
 
@@ -262,13 +259,16 @@ def ice_servers_view(request):
             status=502,
         )
 
+
+    # =====================================================
+    # 9. TIMEOUT
+    # =====================================================
 
     except TimeoutError as error:
-        print(
-            "CLOUDFLARE TURN TIMEOUT:",
-            str(
-                error
-            ),
+
+        logger.error(
+            "CLOUDFLARE TURN TIMEOUT | %s",
+            error,
         )
 
 
@@ -281,15 +281,15 @@ def ice_servers_view(request):
         )
 
 
+    # =====================================================
+    # 10. INVALID JSON
+    # =====================================================
+
     except json.JSONDecodeError as error:
-        print(
-            "CLOUDFLARE TURN JSON ERROR:",
-            {
-                "message":
-                    str(
-                        error
-                    ),
-            }
+
+        logger.error(
+            "CLOUDFLARE TURN JSON ERROR | %s",
+            error,
         )
 
 
@@ -303,24 +303,15 @@ def ice_servers_view(request):
         )
 
 
-    except Exception as error:
-        #
-        # Last-resort logging.
-        #
-        # Do NOT return Python internals to the
-        # frontend in production.
-        #
-        print(
-            "CLOUDFLARE TURN UNEXPECTED ERROR:",
-            {
-                "type":
-                    type(error).__name__,
+    # =====================================================
+    # 11. UNEXPECTED ERROR
+    # =====================================================
 
-                "message":
-                    str(
-                        error
-                    ),
-            }
+    except Exception as error:
+
+        logger.exception(
+            "CLOUDFLARE TURN UNEXPECTED ERROR | %s",
+            error,
         )
 
 
@@ -333,11 +324,12 @@ def ice_servers_view(request):
         )
 
 
-    ice_servers = (
-        cloudflare_data
-        .get(
-            "iceServers"
-        )
+    # =====================================================
+    # 12. READ ICE SERVERS
+    # =====================================================
+
+    ice_servers = cloudflare_data.get(
+        "iceServers"
     )
 
 
@@ -348,9 +340,10 @@ def ice_servers_view(request):
         )
         or not ice_servers
     ):
-        print(
+
+        logger.error(
             "CLOUDFLARE TURN INVALID RESPONSE: "
-            "iceServers missing or empty."
+            "iceServers is missing or empty."
         )
 
 
@@ -364,22 +357,15 @@ def ice_servers_view(request):
         )
 
 
-    #
-    # Cloudflare includes alternate port 53
-    # in the response.
-    #
-    # Their docs note that browsers may block
-    # it, so we remove :53 while keeping:
-    #
-    # STUN 3478
-    # TURN UDP 3478
-    # TURN TCP 3478 / 80
-    # TURN TLS 5349 / 443
-    #
+    # =====================================================
+    # 13. CLEAN ICE SERVER URLS
+    # =====================================================
+
     cleaned_servers = []
 
 
     for server in ice_servers:
+
         if not isinstance(
             server,
             dict,
@@ -410,14 +396,14 @@ def ice_servers_view(request):
 
 
         filtered_urls = [
-            item
-            for item in urls
+            url
+            for url in urls
             if (
                 isinstance(
-                    item,
+                    url,
                     str,
                 )
-                and ":53" not in item
+                and ":53" not in url
             )
         ]
 
@@ -439,10 +425,15 @@ def ice_servers_view(request):
         )
 
 
+    # =====================================================
+    # 14. VERIFY CLEANED SERVERS
+    # =====================================================
+
     if not cleaned_servers:
-        print(
+
+        logger.error(
             "CLOUDFLARE TURN INVALID RESPONSE: "
-            "No usable ICE URLs after filtering."
+            "No usable ICE servers remain."
         )
 
 
@@ -456,20 +447,16 @@ def ice_servers_view(request):
         )
 
 
-    print(
-        "CLOUDFLARE TURN SUCCESS:",
-        {
-            "user_id":
-                request.user.id,
+    # =====================================================
+    # 15. SUCCESS
+    # =====================================================
 
-            "server_count":
-                len(
-                    cleaned_servers
-                ),
-
-            "ttl":
-                ttl,
-        }
+    logger.info(
+        "CLOUDFLARE TURN SUCCESS | "
+        "user_id=%s | servers=%s | ttl=%s",
+        request.user.id,
+        len(cleaned_servers),
+        ttl,
     )
 
 
@@ -484,5 +471,6 @@ def ice_servers_view(request):
             "provider":
                 "cloudflare",
         },
+
         status=200,
     )
