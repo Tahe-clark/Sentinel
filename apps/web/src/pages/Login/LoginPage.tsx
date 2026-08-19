@@ -179,11 +179,17 @@ function LoginPage() {
             "
           >
             <input
+              type="text"
+
               value={
                 username
               }
 
-              placeholder="clark@sentinel.app"
+              placeholder=
+                "Nom d'utilisateur ou email"
+
+              autoComplete=
+                "username"
 
               onChange={(
                 event
@@ -213,7 +219,11 @@ function LoginPage() {
                 password
               }
 
-              placeholder="••••••••••••"
+              placeholder=
+                "••••••••••••"
+
+              autoComplete=
+                "current-password"
 
               onChange={(
                 event
@@ -236,7 +246,29 @@ function LoginPage() {
             />
 
 
+            <div
+              className="
+                text-right
+              "
+            >
+              <Link
+                to="/forgot-password"
+
+                className="
+                  text-xs
+                  text-muted
+                  hover:text-white
+                  transition-colors
+                "
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
+
+
             <button
+              type="submit"
+
               disabled={
                 loading
               }
@@ -249,6 +281,7 @@ function LoginPage() {
                 text-xs
                 font-medium
                 mt-2
+                disabled:opacity-50
               "
             >
               {loading
@@ -286,6 +319,7 @@ function LoginPage() {
 
               className="
                 text-white
+                hover:underline
               "
             >
               Créer un compte
@@ -396,9 +430,17 @@ function LoginPage() {
             </label>
 
             <input
+              type="text"
+
               value={
                 username
               }
+
+              placeholder=
+                "Nom d'utilisateur ou email"
+
+              autoComplete=
+                "username"
 
               onChange={(
                 event
@@ -444,6 +486,12 @@ function LoginPage() {
                 password
               }
 
+              placeholder=
+                "••••••••••••"
+
+              autoComplete=
+                "current-password"
+
               onChange={(
                 event
               ) =>
@@ -468,7 +516,28 @@ function LoginPage() {
           </div>
 
 
+          <div
+            className="
+              text-right
+            "
+          >
+            <Link
+              to="/forgot-password"
+
+              className="
+                text-xs
+                text-emerald-400
+                hover:underline
+              "
+            >
+              Mot de passe oublié ?
+            </Link>
+          </div>
+
+
           <button
+            type="submit"
+
             disabled={
               loading
             }
@@ -478,6 +547,7 @@ function LoginPage() {
               py-2.5
               bg-emerald-600
               hover:bg-emerald-500
+              disabled:opacity-50
               text-black
               font-bold
               uppercase
@@ -522,6 +592,7 @@ function LoginPage() {
 
             className="
               text-emerald-400
+              hover:underline
             "
           >
             CRÉER COMPTE
