@@ -36,6 +36,14 @@ CLOUDFLARE_TURN_ENDPOINT = (
     IsAuthenticated,
 ])
 def ice_servers_view(request):
+    """
+    Generate short-lived Cloudflare TURN credentials.
+
+    The permanent Cloudflare TURN key stays only
+    on the backend. The browser receives only the
+    temporary ICE server configuration.
+    """
+
     key_id = os.getenv(
         "CLOUDFLARE_TURN_KEY_ID",
         "",
@@ -59,10 +67,40 @@ def ice_servers_view(request):
         ttl = 86400
 
 
-    if (
-        not key_id
-        or not api_token
-    ):
+    #
+    # Cloudflare currently allows TURN credentials
+    # for up to 48 hours.
+    #
+    ttl = max(
+        60,
+        min(
+            ttl,
+            172800,
+        ),
+    )
+
+
+    if not key_id:
+        print(
+            "CLOUDFLARE TURN CONFIG ERROR: "
+            "CLOUDFLARE_TURN_KEY_ID is missing."
+        )
+
+        return JsonResponse(
+            {
+                "error":
+                    "TURN service is not configured."
+            },
+            status=503,
+        )
+
+
+    if not api_token:
+        print(
+            "CLOUDFLARE TURN CONFIG ERROR: "
+            "CLOUDFLARE_TURN_API_TOKEN is missing."
+        )
+
         return JsonResponse(
             {
                 "error":
@@ -104,6 +142,9 @@ def ice_servers_view(request):
 
                 "Content-Type":
                     "application/json",
+
+                "Accept":
+                    "application/json",
             },
         )
     )
@@ -112,14 +153,37 @@ def ice_servers_view(request):
     try:
         with urllib.request.urlopen(
             cloudflare_request,
-            timeout=10,
+            timeout=15,
         ) as response:
+
+            status_code = (
+                response.status
+            )
+
             response_body = (
                 response
                 .read()
                 .decode(
                     "utf-8"
                 )
+            )
+
+
+        if status_code not in (
+            200,
+            201,
+        ):
+            print(
+                "CLOUDFLARE TURN UNEXPECTED STATUS:",
+                status_code,
+            )
+
+            return JsonResponse(
+                {
+                    "error":
+                        "Unable to obtain TURN credentials."
+                },
+                status=502,
             )
 
 
@@ -130,12 +194,136 @@ def ice_servers_view(request):
         )
 
 
-    except (
-        urllib.error.URLError,
-        urllib.error.HTTPError,
-        TimeoutError,
-        json.JSONDecodeError,
-    ):
+    except urllib.error.HTTPError as error:
+        try:
+            error_body = (
+                error.read()
+                .decode(
+                    "utf-8",
+                    errors="replace",
+                )
+            )
+
+        except Exception:
+            error_body = (
+                "Unable to read Cloudflare "
+                "error response."
+            )
+
+
+        #
+        # IMPORTANT:
+        # We log Cloudflare's response, but we
+        # NEVER print api_token or Authorization.
+        #
+        print(
+            "CLOUDFLARE TURN HTTP ERROR:",
+            {
+                "status":
+                    error.code,
+
+                "reason":
+                    str(
+                        error.reason
+                    ),
+
+                "response":
+                    error_body[:1500],
+            }
+        )
+
+
+        return JsonResponse(
+            {
+                "error":
+                    "Unable to obtain TURN credentials."
+            },
+            status=502,
+        )
+
+
+    except urllib.error.URLError as error:
+        print(
+            "CLOUDFLARE TURN URL ERROR:",
+            {
+                "reason":
+                    str(
+                        error.reason
+                    ),
+            }
+        )
+
+
+        return JsonResponse(
+            {
+                "error":
+                    "Unable to obtain TURN credentials."
+            },
+            status=502,
+        )
+
+
+    except TimeoutError as error:
+        print(
+            "CLOUDFLARE TURN TIMEOUT:",
+            str(
+                error
+            ),
+        )
+
+
+        return JsonResponse(
+            {
+                "error":
+                    "Unable to obtain TURN credentials."
+            },
+            status=502,
+        )
+
+
+    except json.JSONDecodeError as error:
+        print(
+            "CLOUDFLARE TURN JSON ERROR:",
+            {
+                "message":
+                    str(
+                        error
+                    ),
+            }
+        )
+
+
+        return JsonResponse(
+            {
+                "error":
+                    "TURN provider returned "
+                    "an invalid response."
+            },
+            status=502,
+        )
+
+
+    except Exception as error:
+        #
+        # Last-resort logging.
+        #
+        # Do NOT return Python internals to the
+        # frontend in production.
+        #
+        print(
+            "CLOUDFLARE TURN UNEXPECTED ERROR:",
+            {
+                "type":
+                    type(error).__name__,
+
+                "message":
+                    str(
+                        error
+                    ),
+            }
+        )
+
+
         return JsonResponse(
             {
                 "error":
@@ -160,19 +348,45 @@ def ice_servers_view(request):
         )
         or not ice_servers
     ):
+        print(
+            "CLOUDFLARE TURN INVALID RESPONSE: "
+            "iceServers missing or empty."
+        )
+
+
         return JsonResponse(
             {
                 "error":
-                    "TURN provider returned an invalid response."
+                    "TURN provider returned "
+                    "an invalid response."
             },
             status=502,
         )
 
 
+    #
+    # Cloudflare includes alternate port 53
+    # in the response.
+    #
+    # Their docs note that browsers may block
+    # it, so we remove :53 while keeping:
+    #
+    # STUN 3478
+    # TURN UDP 3478
+    # TURN TCP 3478 / 80
+    # TURN TLS 5349 / 443
+    #
     cleaned_servers = []
 
 
     for server in ice_servers:
+        if not isinstance(
+            server,
+            dict,
+        ):
+            continue
+
+
         urls = server.get(
             "urls",
             []
@@ -188,10 +402,23 @@ def ice_servers_view(request):
             ]
 
 
+        if not isinstance(
+            urls,
+            list,
+        ):
+            continue
+
+
         filtered_urls = [
-            url
-            for url in urls
-            if ":53" not in url
+            item
+            for item in urls
+            if (
+                isinstance(
+                    item,
+                    str,
+                )
+                and ":53" not in item
+            )
         ]
 
 
@@ -201,6 +428,7 @@ def ice_servers_view(request):
 
         cleaned_server = {
             **server,
+
             "urls":
                 filtered_urls,
         }
@@ -209,6 +437,40 @@ def ice_servers_view(request):
         cleaned_servers.append(
             cleaned_server
         )
+
+
+    if not cleaned_servers:
+        print(
+            "CLOUDFLARE TURN INVALID RESPONSE: "
+            "No usable ICE URLs after filtering."
+        )
+
+
+        return JsonResponse(
+            {
+                "error":
+                    "TURN provider returned "
+                    "no usable ICE servers."
+            },
+            status=502,
+        )
+
+
+    print(
+        "CLOUDFLARE TURN SUCCESS:",
+        {
+            "user_id":
+                request.user.id,
+
+            "server_count":
+                len(
+                    cleaned_servers
+                ),
+
+            "ttl":
+                ttl,
+        }
+    )
 
 
     return JsonResponse(
@@ -221,5 +483,6 @@ def ice_servers_view(request):
 
             "provider":
                 "cloudflare",
-        }
+        },
+        status=200,
     )
