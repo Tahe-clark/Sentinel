@@ -363,6 +363,36 @@ def login_view(request):
                 matched_user.username
             )
 
+    candidate = (
+    User.objects
+    .filter(
+        username=username
+    )
+    .first()
+)
+
+    print(
+        "LOGIN DEBUG:",
+        {
+            "identifier": identifier,
+            "resolved_username": username,
+            "user_exists": candidate is not None,
+            "password_matches":
+                (
+                    candidate.check_password(
+                        password
+                    )
+                    if candidate
+                    else False
+                ),
+            "is_active":
+                (
+                    candidate.is_active
+                    if candidate
+                    else None
+                ),
+        }
+    )
 
     user = authenticate(
         request,
