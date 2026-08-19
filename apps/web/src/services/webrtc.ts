@@ -1,13 +1,13 @@
-let cachedIceServers:
-  RTCIceServer[] | null = null;
+import {
+  API_BASE_URL,
+} from "../config/environment";
 
-let cachedAt = 0;
+import {
+  getAuthHeaders,
+} from "./auth";
 
-const CACHE_DURATION_MS =
-  10 * 60 * 1000;
 
-
-const FALLBACK_ICE_SERVERS:
+const GOOGLE_STUN:
   RTCIceServer[] = [
     {
       urls:
@@ -16,39 +16,128 @@ const FALLBACK_ICE_SERVERS:
   ];
 
 
-function normalizeDomain(
-  value: string
-) {
-  return value
-    .trim()
-    .replace(
-      /^https?:\/\//,
-      ""
-    )
-    .replace(
-      /\/$/,
-      ""
-    );
+/* =========================================================
+   TYPES
+========================================================= */
+
+export interface PeerConnectionHandlers {
+  onIceCandidate?:
+    (
+      candidate:
+        RTCIceCandidate
+    ) => void;
+
+  onConnectionStateChange?:
+    (
+      state:
+        RTCPeerConnectionState
+    ) => void;
+
+  onIceConnectionStateChange?:
+    (
+      state:
+        RTCIceConnectionState
+    ) => void;
+
+  onIceCandidateError?:
+    (
+      event:
+        RTCPeerConnectionIceErrorEvent
+    ) => void;
 }
 
 
-export async function getIceServers():
-  Promise<RTCIceServer[]> {
+/* =========================================================
+   CLOUDFLARE TURN
+========================================================= */
 
-  const now =
-    Date.now();
+async function getCloudflareIceServers():
+  Promise<RTCIceServer[] | null> {
+
+  const authHeaders =
+    getAuthHeaders();
 
 
   if (
-    cachedIceServers &&
-    now - cachedAt <
-      CACHE_DURATION_MS
+    !authHeaders.Authorization
   ) {
-    return cachedIceServers;
+    return null;
   }
 
 
-  const rawDomain =
+  try {
+    const response =
+      await fetch(
+        `${API_BASE_URL}/rtc/ice-servers/`,
+        {
+          method:
+            "GET",
+
+          headers: {
+            ...authHeaders,
+          },
+
+          cache:
+            "no-store",
+        }
+      );
+
+
+    if (!response.ok) {
+      console.warn(
+        "Cloudflare TURN unavailable:",
+        response.status
+      );
+
+      return null;
+    }
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !Array.isArray(
+        data.iceServers
+      ) ||
+      data.iceServers.length === 0
+    ) {
+      console.warn(
+        "Cloudflare returned no ICE servers."
+      );
+
+      return null;
+    }
+
+
+    console.log(
+      "ICE provider: Cloudflare"
+    );
+
+
+    return data.iceServers;
+
+  } catch (error) {
+    console.warn(
+      "Unable to load Cloudflare TURN:",
+      error
+    );
+
+
+    return null;
+  }
+}
+
+
+/* =========================================================
+   METERED FALLBACK
+========================================================= */
+
+async function getMeteredIceServers():
+  Promise<RTCIceServer[] | null> {
+
+  const domain =
     import.meta.env
       .VITE_TURN_DOMAIN;
 
@@ -58,26 +147,29 @@ export async function getIceServers():
 
 
   if (
-    !rawDomain ||
+    !domain ||
     !apiKey
   ) {
-    console.warn(
-      "TURN configuration missing. Using STUN only."
-    );
-
-
-    return FALLBACK_ICE_SERVERS;
+    return null;
   }
 
 
-  const domain =
-    normalizeDomain(
-      rawDomain
-    );
+  const normalizedDomain =
+    String(
+      domain
+    )
+      .replace(
+        /^https?:\/\//,
+        ""
+      )
+      .replace(
+        /\/+$/,
+        ""
+      );
 
 
   const url =
-    `https://${domain}` +
+    `https://${normalizedDomain}` +
     `/api/v1/turn/credentials` +
     `?apiKey=${encodeURIComponent(
       apiKey
@@ -99,78 +191,104 @@ export async function getIceServers():
 
 
     if (!response.ok) {
-      throw new Error(
-        `TURN credential request failed (${response.status}).`
+      console.warn(
+        "Metered TURN unavailable:",
+        response.status
       );
+
+      return null;
     }
 
 
-    const data:
-      unknown =
+    const data =
       await response.json();
 
 
     if (
-      !Array.isArray(data) ||
+      !Array.isArray(
+        data
+      ) ||
       data.length === 0
     ) {
-      throw new Error(
-        "TURN credential response did not contain ICE servers."
-      );
+      return null;
     }
 
 
-    cachedIceServers =
-      data as RTCIceServer[];
-
-    cachedAt =
-      now;
-
-
     console.log(
-      "TURN/STUN ICE configuration loaded."
+      "ICE provider: Metered fallback"
     );
 
 
-    return cachedIceServers;
+    return data;
 
   } catch (error) {
-    console.error(
-      "Unable to load TURN credentials:",
+    console.warn(
+      "Unable to load Metered TURN:",
       error
     );
 
 
-    return FALLBACK_ICE_SERVERS;
+    return null;
   }
 }
 
 
-interface PeerConnectionHandlers {
-  onIceCandidate?:
-    (
-      candidate:
-        RTCIceCandidate
-    ) => void;
+/* =========================================================
+   ICE CONFIGURATION
+========================================================= */
 
-  onConnectionStateChange?:
-    (
-      state:
-        RTCPeerConnectionState
-    ) => void;
+export async function getIceServers():
+  Promise<RTCIceServer[]> {
 
-  onIceConnectionStateChange?:
-    (
-      state:
-        RTCIceConnectionState
-    ) => void;
+  const cloudflare =
+    await getCloudflareIceServers();
+
+
+  if (
+    cloudflare &&
+    cloudflare.length > 0
+  ) {
+    return [
+      ...GOOGLE_STUN,
+      ...cloudflare,
+    ];
+  }
+
+
+  const metered =
+    await getMeteredIceServers();
+
+
+  if (
+    metered &&
+    metered.length > 0
+  ) {
+    return [
+      ...GOOGLE_STUN,
+      ...metered,
+    ];
+  }
+
+
+  console.warn(
+    "No TURN provider available. " +
+    "Using STUN only."
+  );
+
+
+  return GOOGLE_STUN;
 }
 
 
+/* =========================================================
+   PEER CONNECTION
+========================================================= */
+
 export async function createConfiguredPeerConnection(
   handlers:
-    PeerConnectionHandlers = {}
-): Promise<RTCPeerConnection> {
+    PeerConnectionHandlers = {},
+):
+  Promise<RTCPeerConnection> {
 
   const iceServers =
     await getIceServers();
@@ -179,13 +297,17 @@ export async function createConfiguredPeerConnection(
   const peerConnection =
     new RTCPeerConnection({
       iceServers,
+
       iceCandidatePoolSize:
         10,
     });
 
 
   peerConnection.onicecandidate =
-    (event) => {
+    (event:
+      RTCPeerConnectionIceEvent
+    ) => {
+
       if (
         !event.candidate
       ) {
@@ -204,11 +326,23 @@ export async function createConfiguredPeerConnection(
   peerConnection
     .onconnectionstatechange =
     () => {
+
+      const state:
+        RTCPeerConnectionState =
+          peerConnection
+            .connectionState;
+
+
+      console.log(
+        "WebRTC connection state:",
+        state
+      );
+
+
       handlers
         .onConnectionStateChange
         ?.(
-          peerConnection
-            .connectionState
+          state
         );
     };
 
@@ -216,25 +350,61 @@ export async function createConfiguredPeerConnection(
   peerConnection
     .oniceconnectionstatechange =
     () => {
+
+      const state:
+        RTCIceConnectionState =
+          peerConnection
+            .iceConnectionState;
+
+
+      console.log(
+        "ICE connection state:",
+        state
+      );
+
+
       handlers
         .onIceConnectionStateChange
         ?.(
-          peerConnection
-            .iceConnectionState
+          state
         );
     };
 
 
-  peerConnection.onicecandidateerror =
-    (event) => {
+  peerConnection
+    .onicecandidateerror =
+    (
+      event:
+        RTCPeerConnectionIceErrorEvent
+    ) => {
+
       console.warn(
         "ICE candidate error:",
         event.errorCode,
-        event.errorText,
-        event.url
+        event.errorText
       );
+
+
+      handlers
+        .onIceCandidateError
+        ?.(
+          event
+        );
     };
 
 
   return peerConnection;
+}
+
+
+/* =========================================================
+   OPTIONAL SIMPLE API
+========================================================= */
+
+export async function createPeerConnection():
+  Promise<RTCPeerConnection> {
+
+  return (
+    createConfiguredPeerConnection()
+  );
 }
