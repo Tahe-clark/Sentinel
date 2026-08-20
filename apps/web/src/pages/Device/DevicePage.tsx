@@ -22,6 +22,45 @@ import {
 } from "../../services/webrtc";
 
 
+type SafariPresentationMode =
+  | "inline"
+  | "picture-in-picture"
+  | "fullscreen";
+
+
+type SafariVideoElement =
+  HTMLVideoElement & {
+    requestPictureInPicture?: () =>
+      Promise<unknown>;
+
+    webkitEnterFullscreen?: () =>
+      void;
+
+    webkitPresentationMode?:
+      SafariPresentationMode;
+
+    webkitSupportsPresentationMode?: (
+      mode: SafariPresentationMode
+    ) => boolean;
+
+    webkitSetPresentationMode?: (
+      mode: SafariPresentationMode
+    ) => void;
+  };
+
+
+type PipDocument =
+  Document & {
+    pictureInPictureEnabled?: boolean;
+
+    pictureInPictureElement?:
+      Element | null;
+
+    exitPictureInPicture?: () =>
+      Promise<void>;
+  };
+
+
 function DevicePage() {
   const {
     deviceId,
@@ -38,10 +77,14 @@ function DevicePage() {
 
 
   const videoRef =
-    useRef<HTMLVideoElement>(null);
+    useRef<HTMLVideoElement>(
+      null
+    );
 
   const videoContainerRef =
-    useRef<HTMLDivElement>(null);
+    useRef<HTMLDivElement>(
+      null
+    );
 
   const remoteStreamRef =
     useRef<MediaStream | null>(
@@ -74,7 +117,9 @@ function DevicePage() {
     );
 
   const recordedChunksRef =
-    useRef<Blob[]>([]);
+    useRef<Blob[]>(
+      []
+    );
 
 
   const [
@@ -87,17 +132,41 @@ function DevicePage() {
   const [
     recording,
     setRecording,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     recordingSeconds,
     setRecordingSeconds,
-  ] = useState(0);
+  ] = useState(
+    0
+  );
 
   const [
     fullscreen,
     setFullscreen,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
+
+  const [
+    pictureInPicture,
+    setPictureInPicture,
+  ] = useState(
+    false
+  );
+
+  const [
+    pipSupported,
+    setPipSupported,
+  ] = useState(
+    true
+  );
+
+
+  const connected =
+    status === "connected";
 
 
   useEffect(() => {
@@ -110,10 +179,14 @@ function DevicePage() {
     }
 
 
-    let disposed = false;
+    let disposed =
+      false;
+
     let reconnectTimer:
       number | undefined;
-    let reconnectAttempt = 0;
+
+    let reconnectAttempt =
+      0;
 
 
     function scheduleReconnect() {
@@ -122,14 +195,17 @@ function DevicePage() {
       }
 
 
-      const delay = Math.min(
-        1000 *
-        2 ** reconnectAttempt,
-        10000
-      );
+      const delay =
+        Math.min(
+          1000 *
+            2 **
+              reconnectAttempt,
+          10000
+        );
 
 
-      reconnectAttempt += 1;
+      reconnectAttempt +=
+        1;
 
 
       setStatus(
@@ -176,16 +252,19 @@ function DevicePage() {
         socket;
 
 
-      socket.onopen = () => {
-        reconnectAttempt = 0;
+      socket.onopen =
+        () => {
+          reconnectAttempt =
+            0;
 
-
-        requestCamera();
-      };
+          requestCamera();
+        };
 
 
       socket.onmessage =
-        async (event) => {
+        async (
+          event
+        ) => {
           const data =
             JSON.parse(
               event.data
@@ -292,45 +371,48 @@ function DevicePage() {
 
           if (
             data.type ===
-            "authorization_error"
+              "authorization_error"
           ) {
             setStatus(
               data.message ??
-              "Unauthorized"
+                "Unauthorized"
             );
           }
         };
 
 
-      socket.onerror = (
-        error
-      ) => {
-        console.error(
-          "Viewer WebSocket error:",
+      socket.onerror =
+        (
           error
-        );
-      };
-
-
-      socket.onclose = () => {
-        if (
-          socketRef.current ===
-          socket
-        ) {
-          socketRef.current =
-            null;
-        }
-
-
-        if (!disposed) {
-          setStatus(
-            "Signaling disconnected"
+        ) => {
+          console.error(
+            "Viewer WebSocket error:",
+            error
           );
+        };
 
 
-          scheduleReconnect();
-        }
-      };
+      socket.onclose =
+        () => {
+          if (
+            socketRef.current ===
+              socket
+          ) {
+            socketRef.current =
+              null;
+          }
+
+
+          if (
+            !disposed
+          ) {
+            setStatus(
+              "Signaling disconnected"
+            );
+
+            scheduleReconnect();
+          }
+        };
     }
 
 
@@ -349,12 +431,13 @@ function DevicePage() {
 
 
     return () => {
-      disposed = true;
+      disposed =
+        true;
 
 
       if (
         reconnectTimer !==
-        undefined
+          undefined
       ) {
         window.clearTimeout(
           reconnectTimer
@@ -380,19 +463,29 @@ function DevicePage() {
         ?.close();
 
 
+      peerConnectionRef.current =
+        null;
+
+
       if (
         mediaRecorderRef.current &&
-        mediaRecorderRef.current.state !==
+        mediaRecorderRef.current
+          .state !==
           "inactive"
       ) {
         mediaRecorderRef.current
           .stop();
       }
     };
-  }, [deviceId]);
+  }, [
+    deviceId,
+  ]);
+
 
   useEffect(() => {
-    if (!recording) {
+    if (
+      !recording
+    ) {
       setRecordingSeconds(
         0
       );
@@ -405,7 +498,9 @@ function DevicePage() {
       window.setInterval(
         () => {
           setRecordingSeconds(
-            (current) =>
+            (
+              current
+            ) =>
               current + 1
           );
         },
@@ -418,14 +513,18 @@ function DevicePage() {
         interval
       );
     };
-  }, [recording]);
+  }, [
+    recording,
+  ]);
 
 
   useEffect(() => {
     function handleFullscreenChange() {
       setFullscreen(
-        document.fullscreenElement ===
-          videoContainerRef.current
+        document
+          .fullscreenElement ===
+          videoContainerRef
+            .current
       );
     }
 
@@ -440,6 +539,169 @@ function DevicePage() {
       document.removeEventListener(
         "fullscreenchange",
         handleFullscreenChange
+      );
+    };
+  }, []);
+
+
+  useEffect(() => {
+    const video =
+      videoRef.current as
+        SafariVideoElement |
+        null;
+
+
+    if (!video) {
+      return;
+    }
+
+
+    /*
+     * Important :
+     * currentVideo est maintenant garanti non-null
+     * dans tous les callbacks ci-dessous.
+     */
+    const currentVideo =
+      video;
+
+
+    const pipDocument =
+      document as PipDocument;
+
+
+    const standardPip =
+      Boolean(
+        pipDocument
+          .pictureInPictureEnabled
+      ) &&
+      typeof currentVideo
+        .requestPictureInPicture ===
+        "function";
+
+
+    const safariPip =
+      typeof currentVideo
+        .webkitSetPresentationMode ===
+        "function" &&
+      (
+        typeof currentVideo
+          .webkitSupportsPresentationMode !==
+          "function" ||
+        currentVideo
+          .webkitSupportsPresentationMode(
+            "picture-in-picture"
+          )
+      );
+
+
+    setPipSupported(
+      standardPip ||
+        safariPip
+    );
+
+
+    function handleEnterPiP() {
+      setPictureInPicture(
+        true
+      );
+    }
+
+
+    function handleLeavePiP() {
+      setPictureInPicture(
+        false
+      );
+    }
+
+
+    function handleSafariMode() {
+      setPictureInPicture(
+        currentVideo
+          .webkitPresentationMode ===
+          "picture-in-picture"
+      );
+
+
+      setFullscreen(
+        currentVideo
+          .webkitPresentationMode ===
+          "fullscreen"
+      );
+    }
+
+
+    function handleIOSFullscreenStart() {
+      setFullscreen(
+        true
+      );
+    }
+
+
+    function handleIOSFullscreenEnd() {
+      setFullscreen(
+        false
+      );
+    }
+
+
+    currentVideo.addEventListener(
+      "enterpictureinpicture",
+      handleEnterPiP
+    );
+
+
+    currentVideo.addEventListener(
+      "leavepictureinpicture",
+      handleLeavePiP
+    );
+
+
+    currentVideo.addEventListener(
+      "webkitpresentationmodechanged",
+      handleSafariMode
+    );
+
+
+    currentVideo.addEventListener(
+      "webkitbeginfullscreen",
+      handleIOSFullscreenStart
+    );
+
+
+    currentVideo.addEventListener(
+      "webkitendfullscreen",
+      handleIOSFullscreenEnd
+    );
+
+
+    return () => {
+      currentVideo.removeEventListener(
+        "enterpictureinpicture",
+        handleEnterPiP
+      );
+
+
+      currentVideo.removeEventListener(
+        "leavepictureinpicture",
+        handleLeavePiP
+      );
+
+
+      currentVideo.removeEventListener(
+        "webkitpresentationmodechanged",
+        handleSafariMode
+      );
+
+
+      currentVideo.removeEventListener(
+        "webkitbeginfullscreen",
+        handleIOSFullscreenStart
+      );
+
+
+      currentVideo.removeEventListener(
+        "webkitendfullscreen",
+        handleIOSFullscreenEnd
       );
     };
   }, []);
@@ -515,23 +777,206 @@ function DevicePage() {
 
 
   async function toggleFullscreen() {
+    const container =
+      videoContainerRef
+        .current;
+
+
+    const video =
+      videoRef.current as
+        SafariVideoElement |
+        null;
+
+
+    if (!video) {
+      return;
+    }
+
+
     try {
       if (
-        !document.fullscreenElement
+        document
+          .fullscreenElement
       ) {
-        await videoContainerRef.current
-          ?.requestFullscreen();
+        await document
+          .exitFullscreen();
 
         return;
       }
 
 
-      await document
-        .exitFullscreen();
+      if (
+        container &&
+        typeof container
+          .requestFullscreen ===
+          "function"
+      ) {
+        try {
+          await container
+            .requestFullscreen();
 
-    } catch (error) {
+          return;
+
+        } catch {
+          /*
+           * Sur iPhone Safari,
+           * requestFullscreen peut exister
+           * sans fonctionner sur un div.
+           */
+        }
+      }
+
+
+      if (
+        typeof video
+          .webkitEnterFullscreen ===
+          "function"
+      ) {
+        video
+          .webkitEnterFullscreen();
+
+        return;
+      }
+
+
+      if (
+        typeof video
+          .webkitSetPresentationMode ===
+          "function" &&
+        (
+          typeof video
+            .webkitSupportsPresentationMode !==
+            "function" ||
+          video
+            .webkitSupportsPresentationMode(
+              "fullscreen"
+            )
+        )
+      ) {
+        video
+          .webkitSetPresentationMode(
+            "fullscreen"
+          );
+
+        return;
+      }
+
+
+      console.warn(
+        "Fullscreen is not supported."
+      );
+
+    } catch (
+      error
+    ) {
       console.error(
         "Fullscreen error:",
+        error
+      );
+    }
+  }
+
+
+  async function togglePictureInPicture() {
+    const video =
+      videoRef.current as
+        SafariVideoElement |
+        null;
+
+
+    if (
+      !video ||
+      !connected
+    ) {
+      return;
+    }
+
+
+    const pipDocument =
+      document as
+        PipDocument;
+
+
+    try {
+      if (
+        pipDocument
+          .pictureInPictureElement &&
+        typeof pipDocument
+          .exitPictureInPicture ===
+          "function"
+      ) {
+        await pipDocument
+          .exitPictureInPicture();
+
+        return;
+      }
+
+
+      if (
+        typeof video
+          .requestPictureInPicture ===
+          "function"
+      ) {
+        await video
+          .requestPictureInPicture();
+
+        return;
+      }
+
+
+      if (
+        typeof video
+          .webkitSetPresentationMode ===
+          "function" &&
+        (
+          typeof video
+            .webkitSupportsPresentationMode !==
+            "function" ||
+          video
+            .webkitSupportsPresentationMode(
+              "picture-in-picture"
+            )
+        )
+      ) {
+        const newMode:
+          SafariPresentationMode =
+            video
+              .webkitPresentationMode ===
+              "picture-in-picture"
+              ? "inline"
+              : "picture-in-picture";
+
+
+        video
+          .webkitSetPresentationMode(
+            newMode
+          );
+
+
+        setPictureInPicture(
+          newMode ===
+            "picture-in-picture"
+        );
+
+
+        return;
+      }
+
+
+      setPipSupported(
+        false
+      );
+
+
+      console.warn(
+        "Picture-in-Picture is not supported."
+      );
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "Picture-in-Picture error:",
         error
       );
     }
@@ -542,7 +987,9 @@ function DevicePage() {
     const peerConnection =
       await createConfiguredPeerConnection({
         onIceCandidate:
-          (candidate) => {
+          (
+            candidate
+          ) => {
             const socket =
               socketRef.current;
 
@@ -562,26 +1009,34 @@ function DevicePage() {
                   "ice_candidate",
 
                 viewer_id:
-                  viewerIdRef.current,
+                  viewerIdRef
+                    .current,
 
                 target_device_id:
                   deviceId,
 
                 candidate:
-                  candidate.toJSON(),
+                  candidate
+                    .toJSON(),
               })
             );
           },
 
+
         onConnectionStateChange:
-          (state) => {
+          (
+            state
+          ) => {
             setStatus(
               state
             );
           },
 
+
         onIceConnectionStateChange:
-          (state) => {
+          (
+            state
+          ) => {
             console.log(
               "Viewer ICE state:",
               state
@@ -591,7 +1046,9 @@ function DevicePage() {
 
 
     peerConnection.ontrack =
-      (event) => {
+      (
+        event
+      ) => {
         const stream =
           event.streams[0];
 
@@ -608,14 +1065,27 @@ function DevicePage() {
         if (
           videoRef.current
         ) {
-          videoRef.current.srcObject =
-            stream;
+          videoRef.current
+            .srcObject =
+              stream;
 
 
           videoRef.current
             .play()
             .catch(
-              console.warn
+              (
+                error
+              ) => {
+                if (
+                  error.name !==
+                    "AbortError"
+                ) {
+                  console.warn(
+                    "Video play error:",
+                    error
+                  );
+                }
+              }
             );
         }
 
@@ -628,6 +1098,7 @@ function DevicePage() {
 
     return peerConnection;
   }
+
 
   async function handleOffer(
     offer:
@@ -657,7 +1128,8 @@ function DevicePage() {
 
     for (
       const candidate
-      of pendingIceCandidatesRef.current
+      of pendingIceCandidatesRef
+        .current
     ) {
       await peerConnection
         .addIceCandidate(
@@ -681,22 +1153,24 @@ function DevicePage() {
       );
 
 
-    socketRef.current?.send(
-      JSON.stringify({
-        type:
-          "webrtc_answer",
+    socketRef.current
+      ?.send(
+        JSON.stringify({
+          type:
+            "webrtc_answer",
 
-        viewer_id:
-          viewerIdRef.current,
+          viewer_id:
+            viewerIdRef
+              .current,
 
-        target_device_id:
-          deviceId,
+          target_device_id:
+            deviceId,
 
-        answer:
-          peerConnection
-            .localDescription,
-      })
-    );
+          answer:
+            peerConnection
+              .localDescription,
+        })
+      );
   }
 
 
@@ -705,7 +1179,8 @@ function DevicePage() {
       RTCIceCandidateInit
   ) {
     const peerConnection =
-      peerConnectionRef.current;
+      peerConnectionRef
+        .current;
 
 
     if (
@@ -717,6 +1192,7 @@ function DevicePage() {
         .push(
           candidate
         );
+
 
       return;
     }
@@ -731,7 +1207,8 @@ function DevicePage() {
 
   function startRecording() {
     const stream =
-      remoteStreamRef.current;
+      remoteStreamRef
+        .current;
 
 
     if (!stream) {
@@ -743,93 +1220,112 @@ function DevicePage() {
       [];
 
 
-    const recorder =
-      new MediaRecorder(
-        stream
-      );
+    try {
+      const recorder =
+        new MediaRecorder(
+          stream
+        );
 
 
-    mediaRecorderRef.current =
-      recorder;
+      mediaRecorderRef.current =
+        recorder;
 
 
-    recorder.ondataavailable =
-      (event) => {
-        if (
-          event.data.size > 0
-        ) {
-          recordedChunksRef.current
-            .push(
-              event.data
-            );
-        }
-      };
-
-
-    recorder.onstop = () => {
-      const blob =
-        new Blob(
-          recordedChunksRef.current,
-          {
-            type:
-              recorder.mimeType ||
-              "video/webm",
+      recorder.ondataavailable =
+        (
+          event
+        ) => {
+          if (
+            event.data.size >
+              0
+          ) {
+            recordedChunksRef.current
+              .push(
+                event.data
+              );
           }
-        );
+        };
 
 
-      const url =
-        URL.createObjectURL(
-          blob
-        );
+      recorder.onstop =
+        () => {
+          const blob =
+            new Blob(
+              recordedChunksRef
+                .current,
+              {
+                type:
+                  recorder
+                    .mimeType ||
+                  "video/webm",
+              }
+            );
 
 
-      const anchor =
-        document.createElement(
-          "a"
-        );
+          const url =
+            URL.createObjectURL(
+              blob
+            );
 
 
-      anchor.href =
-        url;
+          const anchor =
+            document.createElement(
+              "a"
+            );
 
-      anchor.download =
-        `sentinel-${Date.now()}.webm`;
+
+          anchor.href =
+            url;
 
 
-      document.body.appendChild(
-        anchor
+          anchor.download =
+            `sentinel-${Date.now()}.webm`;
+
+
+          document.body
+            .appendChild(
+              anchor
+            );
+
+
+          anchor.click();
+
+
+          anchor.remove();
+
+
+          URL.revokeObjectURL(
+            url
+          );
+
+
+          recordedChunksRef.current =
+            [];
+        };
+
+
+      recorder.start();
+
+
+      setRecording(
+        true
       );
 
-
-      anchor.click();
-
-
-      anchor.remove();
-
-
-      URL.revokeObjectURL(
-        url
+    } catch (
+      error
+    ) {
+      console.error(
+        "Recording error:",
+        error
       );
-
-
-      recordedChunksRef.current =
-        [];
-    };
-
-
-    recorder.start();
-
-
-    setRecording(
-      true
-    );
+    }
   }
 
 
   function stopRecording() {
     const recorder =
-      mediaRecorderRef.current;
+      mediaRecorderRef
+        .current;
 
 
     if (
@@ -873,6 +1369,7 @@ function DevicePage() {
     canvas.width =
       video.videoWidth;
 
+
     canvas.height =
       video.videoHeight;
 
@@ -913,9 +1410,10 @@ function DevicePage() {
       `sentinel-snapshot-${Date.now()}.png`;
 
 
-    document.body.appendChild(
-      anchor
-    );
+    document.body
+      .appendChild(
+        anchor
+      );
 
 
     anchor.click();
@@ -926,22 +1424,29 @@ function DevicePage() {
 
 
   function formatTime(
-    totalSeconds: number
+    totalSeconds:
+      number
   ) {
     const hours =
       Math.floor(
-        totalSeconds / 3600
+        totalSeconds /
+          3600
       );
+
 
     const minutes =
       Math.floor(
         (
-          totalSeconds % 3600
-        ) / 60
+          totalSeconds %
+            3600
+        ) /
+          60
       );
 
+
     const seconds =
-      totalSeconds % 60;
+      totalSeconds %
+        60;
 
 
     return [
@@ -950,427 +1455,85 @@ function DevicePage() {
       seconds,
     ]
       .map(
-        (value) =>
-          String(value)
-            .padStart(
-              2,
-              "0"
-            )
+        (
+          value
+        ) =>
+          String(
+            value
+          ).padStart(
+            2,
+            "0"
+          )
       )
-      .join(":");
+      .join(
+        ":"
+      );
   }
 
 
-  const connected =
-    status === "connected";
-
-
-  if (
-    theme === "glass"
-  ) {
-    return (
-      <div
-        className="
-          min-h-[70vh]
-          flex
-          items-center
-          justify-center
-        "
-      >
-        <div
-          className="
-            w-full
-            max-w-4xl
-            flex
-            flex-col
-            overflow-hidden
-            rounded-3xl
-            glass-card
-            text-white
-          "
-        >
-          <div
-            className="
-              px-6
-              py-5
-              flex
-              items-center
-              justify-between
-              border-b
-              border-white/10
-            "
-          >
-            <div
-              className="
-                flex
-                items-center
-                gap-3
-              "
-            >
-              <LiveDot
-                active={
-                  connected
-                }
-              />
-
-
-              <div>
-                <h3
-                  className="
-                    text-sm
-                    font-bold
-                    tracking-wide
-                  "
-                >
-                  Sentinel Camera
-                </h3>
-
-
-                <p
-                  className="
-                    text-[10px]
-                    opacity-70
-                    font-mono
-                  "
-                >
-                  {deviceId?.slice(
-                    0,
-                    8
-                  )}
-                  {" "}
-                  //
-                  {" "}
-                  LIVE_FEED
-                </p>
-              </div>
-            </div>
-
-
-            <button
-              type="button"
-
-              onClick={() =>
-                navigate(
-                  "/dashboard"
-                )
-              }
-
-              className="
-                w-8
-                h-8
-                rounded-full
-                flex
-                items-center
-                justify-center
-                opacity-70
-                hover:opacity-100
-                transition-opacity
-                text-sm
-                font-bold
-              "
-            >
-              ✕
-            </button>
-          </div>
-
-
-          <div
-            ref={
-              videoContainerRef
-            }
-
-            className="
-              relative
-              aspect-video
-              bg-black
-              flex
-              items-center
-              justify-center
-              overflow-hidden
-              fullscreen:bg-black
-            "
-          >
-            <video
-              ref={
-                videoRef
-              }
-
-              autoPlay
-
-              playsInline
-
-              className="
-                absolute
-                inset-0
-                w-full
-                h-full
-                object-contain
-              "
-            />
-
-
-            <button
-              type="button"
-
-              onClick={
-                toggleFullscreen
-              }
-
-              title={
-                fullscreen
-                  ? "Quitter le plein écran"
-                  : "Plein écran"
-              }
-
-              className="
-                absolute
-                top-4
-                right-4
-                z-30
-                w-9
-                h-9
-                flex
-                items-center
-                justify-center
-                rounded-full
-                bg-black/50
-                border
-                border-white/10
-                text-white/70
-                hover:text-white
-                hover:bg-black/70
-                backdrop-blur-md
-                transition-all
-              "
-            >
-              {fullscreen
-                ? "×"
-                : "⛶"}
-            </button>
-
-
-            <div
-              className="
-                absolute
-                bottom-4
-                left-4
-                z-30
-                flex
-                items-center
-                gap-2
-                px-3
-                py-1.5
-                rounded-full
-                bg-black/40
-                backdrop-blur-md
-                text-[10px]
-                text-white/70
-              "
-            >
-              <span
-                className={
-                  connected
-                    ? "w-1.5 h-1.5 rounded-full bg-emerald-400"
-                    : "w-1.5 h-1.5 rounded-full bg-amber-400"
-                }
-              />
-
-              {status}
-            </div>
-
-
-            {!connected && (
-              <span
-                className="
-                  font-mono
-                  text-xs
-                  text-slate-500
-                  tracking-widest
-                  uppercase
-                  z-10
-                "
-              >
-                {status}
-              </span>
-            )}
-          </div>
-
-
-          <div
-            className="
-              p-5
-              flex
-              flex-wrap
-              items-center
-              justify-between
-              gap-4
-              border-t
-              border-white/10
-              bg-white/5
-            "
-          >
-            <div
-              className="
-                flex
-                items-center
-                gap-2
-                flex-wrap
-              "
-            >
-              <button
-                type="button"
-
-                disabled={
-                  !connected
-                }
-
-                onClick={
-                  recording
-                    ? stopRecording
-                    : startRecording
-                }
-
-                className="
-                  px-4
-                  py-2
-                  rounded-full
-                  text-xs
-                  font-medium
-                  bg-white/10
-                  hover:bg-white/20
-                  text-white
-                  transition-all
-                  disabled:opacity-30
-                "
-              >
-                <span
-                  className="
-                    inline-block
-                    w-2
-                    h-2
-                    rounded-full
-                    bg-rose-500
-                    mr-2
-                  "
-                />
-
-                {recording
-                  ? `Arrêter ${formatTime(recordingSeconds)}`
-                  : "Enregistrer"}
-              </button>
-
-
-              <button
-                type="button"
-
-                disabled={
-                  !connected
-                }
-
-                onClick={
-                  takeSnapshot
-                }
-
-                className="
-                  px-4
-                  py-2
-                  rounded-full
-                  text-xs
-                  font-medium
-                  bg-white/5
-                  hover:bg-white/10
-                  text-muted
-                  transition-all
-                  disabled:opacity-30
-                "
-              >
-                Capture Photo
-              </button>
-            </div>
-
-
-            <ConnectionControlsGlass
-              status={
-                status
-              }
-
-              connected={
-                connected
-              }
-
-              deviceId={
-                deviceId
-              }
-
-              retryCamera={
-                retryCamera
-              }
-            />
-
-
-            <button
-              type="button"
-
-              onClick={() =>
-                navigate(
-                  "/dashboard"
-                )
-              }
-
-              className="
-                px-5
-                py-2
-                rounded-full
-                text-xs
-                font-medium
-                btn-solid
-                shadow-sm
-              "
-            >
-              Quitter
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const glass =
+    theme ===
+      "glass";
 
 
   return (
     <div
-      className="
+      className={`
         min-h-[70vh]
         flex
         items-center
         justify-center
-        font-mono
-      "
+        ${
+          glass
+            ? ""
+            : "font-mono"
+        }
+      `}
     >
       <div
-        className="
+        className={`
           w-full
           max-w-4xl
           flex
           flex-col
           overflow-hidden
-          rounded
-          border
-          border-tactical-border
-          panel-tactical
           text-white
-        "
+
+          ${
+            glass
+              ? `
+                rounded-3xl
+                glass-card
+              `
+              : `
+                rounded
+                border
+                border-tactical-border
+                panel-tactical
+              `
+          }
+        `}
       >
         <div
-          className="
+          className={`
             px-5
             py-4
             flex
             items-center
             justify-between
             border-b
-            border-tactical-border
-            bg-black/40
-          "
+
+            ${
+              glass
+                ? `
+                  border-white/10
+                `
+                : `
+                  border-tactical-border
+                  bg-black/40
+                `
+            }
+          `}
         >
           <div
             className="
@@ -1407,10 +1570,13 @@ function DevicePage() {
               >
                 CAM //
                 {" "}
-                {deviceId?.slice(
-                  0,
-                  8
-                )}
+
+                {deviceId
+                  ?.slice(
+                    0,
+                    8
+                  )}
+
                 {" "}
                 // LIVE_FEED
               </p>
@@ -1421,10 +1587,11 @@ function DevicePage() {
           <button
             type="button"
 
-            onClick={() =>
-              navigate(
-                "/dashboard"
-              )
+            onClick={
+              () =>
+                navigate(
+                  "/dashboard"
+                )
             }
 
             className="
@@ -1437,7 +1604,6 @@ function DevicePage() {
               opacity-70
               hover:opacity-100
               transition-opacity
-              text-sm
               font-bold
             "
           >
@@ -1459,7 +1625,7 @@ function DevicePage() {
             items-center
             justify-center
             overflow-hidden
-            group
+            fullscreen:bg-black
           "
         >
           <video
@@ -1481,153 +1647,6 @@ function DevicePage() {
           />
 
 
-          <div
-            className="
-              absolute
-              inset-4
-              border
-              border-emerald-500/20
-              pointer-events-none
-              flex
-              flex-col
-              justify-between
-              p-3
-              font-mono
-              text-[10px]
-              text-emerald-500/80
-              z-10
-            "
-          >
-            <div
-              className="
-                flex
-                justify-between
-                items-start
-              "
-            >
-              <div
-                className="
-                  space-y-1
-                "
-              >
-                <div>
-                  CONNEXION:
-                  {" "}
-
-                  <span
-                    className="
-                      text-emerald-400
-                    "
-                  >
-                    {status.toUpperCase()}
-                  </span>
-                </div>
-
-
-                <div>
-                  TRANSPORT:
-                  {" "}
-
-                  <span
-                    className="
-                      text-emerald-400
-                    "
-                  >
-                    WEBRTC
-                  </span>
-                </div>
-              </div>
-
-
-              <div
-                className="
-                  text-right
-                "
-              >
-                {recording && (
-                  <div
-                    className="
-                      text-rose-500
-                      font-bold
-                      animate-pulse
-                    "
-                  >
-                    ● REC
-                    {" "}
-                    [
-                    {formatTime(
-                      recordingSeconds
-                    )}
-                    ]
-                  </div>
-                )}
-
-
-                <div>
-                  STREAM:
-                  {" "}
-
-                  {connected
-                    ? "STABLE"
-                    : "WAITING"}
-                </div>
-              </div>
-            </div>
-
-
-            <div
-              className="
-                absolute
-                top-1/2
-                left-1/2
-                -translate-x-1/2
-                -translate-y-1/2
-                w-16
-                h-16
-                border
-                border-emerald-500/30
-                rounded-full
-                flex
-                items-center
-                justify-center
-              "
-            >
-              <div
-                className="
-                  w-2
-                  h-2
-                  bg-emerald-500/40
-                  rounded-full
-                "
-              />
-            </div>
-
-
-            <div
-              className="
-                flex
-                justify-between
-                items-end
-              "
-            >
-              <div>
-                CODEC:
-                {" "}
-                WebRTC
-              </div>
-
-              <div>
-                DEVICE:
-                {" "}
-                {deviceId?.slice(
-                  0,
-                  8
-                )}
-              </div>
-            </div>
-          </div>
-
-
           <button
             type="button"
 
@@ -1635,38 +1654,125 @@ function DevicePage() {
               toggleFullscreen
             }
 
-            title={
-              fullscreen
-                ? "Quitter le plein écran"
-                : "Plein écran"
+            disabled={
+              !connected
             }
+
+            title="Plein écran"
 
             className="
               absolute
               top-4
               right-4
               z-30
-              w-9
-              h-9
+              w-10
+              h-10
               flex
               items-center
               justify-center
-              rounded
-              bg-black/50
+              rounded-full
+              bg-black/60
               border
               border-white/10
-              text-white/70
-              hover:text-emerald-400
-              hover:border-emerald-500/40
-              hover:bg-black/70
-              backdrop-blur-sm
+              text-white
+              backdrop-blur-md
               transition-all
+              hover:bg-black/80
+              disabled:opacity-30
             "
           >
             {fullscreen
               ? "×"
               : "⛶"}
           </button>
+
+
+          <button
+            type="button"
+
+            onClick={
+              togglePictureInPicture
+            }
+
+            disabled={
+              !connected ||
+              !pipSupported
+            }
+
+            title={
+              pictureInPicture
+                ? "Quitter Picture-in-Picture"
+                : "Picture-in-Picture"
+            }
+
+            className="
+              absolute
+              top-4
+              right-16
+              z-30
+              h-10
+              px-3
+              flex
+              items-center
+              justify-center
+              rounded-full
+              bg-black/60
+              border
+              border-white/10
+              text-white
+              text-[10px]
+              font-bold
+              backdrop-blur-md
+              transition-all
+              hover:bg-black/80
+              disabled:opacity-30
+            "
+          >
+            {pictureInPicture
+              ? "PiP ×"
+              : "PiP"}
+          </button>
+
+
+          <div
+            className="
+              absolute
+              bottom-4
+              left-4
+              z-30
+              flex
+              items-center
+              gap-2
+              px-3
+              py-1.5
+              rounded-full
+              bg-black/50
+              backdrop-blur-md
+              text-[10px]
+              text-white/80
+            "
+          >
+            <span
+              className={
+                connected
+                  ? `
+                    w-2
+                    h-2
+                    rounded-full
+                    bg-emerald-400
+                  `
+                  : `
+                    w-2
+                    h-2
+                    rounded-full
+                    bg-amber-400
+                  `
+              }
+            />
+
+
+            {status}
+          </div>
 
 
           {!connected && (
@@ -1687,17 +1793,27 @@ function DevicePage() {
 
 
         <div
-          className="
+          className={`
             p-4
             flex
             flex-wrap
             items-center
             justify-between
-            gap-4
+            gap-3
             border-t
-            border-tactical-border
-            bg-black/40
-          "
+
+            ${
+              glass
+                ? `
+                  border-white/10
+                  bg-white/5
+                `
+                : `
+                  border-tactical-border
+                  bg-black/40
+                `
+            }
+          `}
         >
           <div
             className="
@@ -1721,16 +1837,12 @@ function DevicePage() {
               }
 
               className="
-                px-3
-                py-1.5
-                rounded
+                px-4
+                py-2
                 text-xs
-                font-mono
-                bg-emerald-950
-                border
-                border-emerald-500/40
-                text-emerald-400
-                hover:bg-emerald-900
+                rounded-full
+                bg-white/10
+                hover:bg-white/20
                 disabled:opacity-30
               "
             >
@@ -1745,8 +1857,11 @@ function DevicePage() {
                 "
               />
 
+
               {recording
-                ? "Arrêter"
+                ? `Arrêter ${formatTime(
+                    recordingSeconds
+                  )}`
                 : "Enregistrer"}
             </button>
 
@@ -1763,63 +1878,129 @@ function DevicePage() {
               }
 
               className="
-                px-3
-                py-1.5
-                rounded
+                px-4
+                py-2
                 text-xs
-                font-mono
-                bg-tactical-800
-                border
-                border-tactical-border
-                text-slate-300
-                hover:text-white
+                rounded-full
+                bg-white/5
+                hover:bg-white/10
                 disabled:opacity-30
               "
             >
               Capture Photo
             </button>
+
+
+            <button
+              type="button"
+
+              disabled={
+                !connected ||
+                !pipSupported
+              }
+
+              onClick={
+                togglePictureInPicture
+              }
+
+              className="
+                px-4
+                py-2
+                text-xs
+                rounded-full
+                bg-white/5
+                hover:bg-white/10
+                disabled:opacity-30
+              "
+            >
+              {pictureInPicture
+                ? "Quitter PiP"
+                : "Fenêtre flottante"}
+            </button>
           </div>
 
 
-          <ConnectionControlsTactical
-            status={
-              status
-            }
+          <div
+            className="
+              flex
+              items-center
+              gap-3
+              flex-wrap
+              text-xs
+            "
+          >
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
+              <span
+                className={
+                  connected
+                    ? `
+                      w-2
+                      h-2
+                      rounded-full
+                      bg-emerald-400
+                    `
+                    : `
+                      w-2
+                      h-2
+                      rounded-full
+                      bg-amber-400
+                    `
+                }
+              />
 
-            connected={
-              connected
-            }
 
-            deviceId={
-              deviceId
-            }
+              <span>
+                {status}
+              </span>
+            </div>
 
-            retryCamera={
-              retryCamera
-            }
-          />
+
+            <button
+              type="button"
+
+              onClick={
+                retryCamera
+              }
+
+              className="
+                px-4
+                py-2
+                text-xs
+                rounded-full
+                bg-white/5
+                hover:bg-white/10
+                border
+                border-white/10
+              "
+            >
+              Retry Camera
+            </button>
+          </div>
 
 
           <button
             type="button"
 
-            onClick={() =>
-              navigate(
-                "/dashboard"
-              )
+            onClick={
+              () =>
+                navigate(
+                  "/dashboard"
+                )
             }
 
             className="
-              px-4
-              py-1.5
-              rounded
+              px-5
+              py-2
               text-xs
-              font-mono
-              bg-emerald-600
-              text-black
-              font-bold
-              uppercase
-              hover:bg-emerald-500
+              font-medium
+              rounded-full
+              btn-solid
             "
           >
             Quitter
@@ -1834,7 +2015,8 @@ function DevicePage() {
 function LiveDot({
   active,
 }: {
-  active: boolean;
+  active:
+    boolean;
 }) {
   return (
     <span
@@ -1864,226 +2046,25 @@ function LiveDot({
       <span
         className={
           active
-            ? "relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"
-            : "relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-600"
+            ? `
+              relative
+              inline-flex
+              rounded-full
+              h-2.5
+              w-2.5
+              bg-emerald-500
+            `
+            : `
+              relative
+              inline-flex
+              rounded-full
+              h-2.5
+              w-2.5
+              bg-slate-600
+            `
         }
       />
     </span>
-  );
-}
-
-
-function ConnectionControlsGlass({
-  status,
-  connected,
-  deviceId,
-  retryCamera,
-}: {
-  status: string;
-  connected: boolean;
-  deviceId: string | undefined;
-  retryCamera: () => void;
-}) {
-  return (
-    <div
-      className="
-        flex
-        items-center
-        gap-3
-        text-xs
-        flex-wrap
-        justify-center
-      "
-    >
-      <div
-        className="
-          flex
-          items-center
-          gap-2
-          px-3
-          py-2
-          rounded-full
-          bg-white/5
-          border
-          border-white/10
-        "
-      >
-        <span
-          className={
-            connected
-              ? "w-1.5 h-1.5 rounded-full bg-emerald-400"
-              : "w-1.5 h-1.5 rounded-full bg-amber-400"
-          }
-        />
-
-        <span>
-          {status}
-        </span>
-      </div>
-
-
-      <span
-        className="
-          hidden
-          sm:inline
-          text-muted
-          font-mono
-          text-[10px]
-        "
-      >
-        ID:
-        {" "}
-        {deviceId?.slice(
-          0,
-          8
-        )}
-        ...
-      </span>
-
-
-      <button
-        type="button"
-
-        onClick={
-          retryCamera
-        }
-
-        className="
-          px-4
-          py-2
-          rounded-full
-          text-xs
-          font-medium
-          bg-white/5
-          hover:bg-white/10
-          border
-          border-white/10
-          transition-all
-        "
-      >
-        Retry Camera
-      </button>
-    </div>
-  );
-}
-
-
-function ConnectionControlsTactical({
-  status,
-  connected,
-  deviceId,
-  retryCamera,
-}: {
-  status: string;
-  connected: boolean;
-  deviceId: string | undefined;
-  retryCamera: () => void;
-}) {
-  return (
-    <div
-      className="
-        flex
-        items-center
-        gap-3
-        font-mono
-        text-[10px]
-        flex-wrap
-        justify-center
-      "
-    >
-      <div
-        className="
-          flex
-          items-center
-          gap-2
-        "
-      >
-        <span
-          className="
-            text-slate-500
-          "
-        >
-          STATUS:
-        </span>
-
-
-        <span
-          className={
-            connected
-              ? "text-emerald-400"
-              : "text-amber-400"
-          }
-        >
-          {status.toUpperCase()}
-        </span>
-      </div>
-
-
-      <span
-        className="
-          hidden
-          md:inline
-          text-slate-500
-        "
-      >
-        |
-      </span>
-
-
-      <div
-        className="
-          hidden
-          md:block
-        "
-      >
-        <span
-          className="
-            text-slate-500
-          "
-        >
-          DEVICE:
-        </span>
-
-        {" "}
-
-        <span
-          className="
-            text-slate-300
-          "
-        >
-          {deviceId?.slice(
-            0,
-            8
-          )}
-          ...
-        </span>
-      </div>
-
-
-      <button
-        type="button"
-
-        onClick={
-          retryCamera
-        }
-
-        className="
-          px-3
-          py-1.5
-          rounded
-          bg-tactical-800
-          border
-          border-tactical-border
-          text-emerald-400
-          hover:bg-emerald-950
-          hover:border-emerald-500/40
-          transition-colors
-          uppercase
-        "
-      >
-        Retry Camera
-      </button>
-    </div>
   );
 }
 
