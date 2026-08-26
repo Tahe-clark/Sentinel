@@ -78,9 +78,9 @@ function Navbar({
           top-3
           sm:top-5
           z-40
-          max-w-4xl
-          w-[94%]
-          sm:w-[92%]
+          max-w-5xl
+          w-[95%]
+          sm:w-[94%]
           mx-auto
           my-2
           sm:my-3
@@ -91,13 +91,13 @@ function Navbar({
             glass-nav
             rounded-2xl
             sm:rounded-full
-            px-3.5
+            px-3
             sm:px-5
             py-2.5
             sm:py-3
             flex
             flex-col
-            sm:flex-row
+            lg:flex-row
             items-center
             justify-between
             gap-2.5
@@ -105,13 +105,17 @@ function Navbar({
             shadow-sm
           "
         >
+          {/* =================================================
+              LOGO + DEMO MOBILE
+          ================================================= */}
+
           <div
             className="
               flex
               items-center
               justify-between
               w-full
-              sm:w-auto
+              lg:w-auto
               gap-3
             "
           >
@@ -160,7 +164,7 @@ function Navbar({
               }
 
               className="
-                sm:hidden
+                lg:hidden
                 flex
                 items-center
                 gap-1.5
@@ -193,7 +197,7 @@ function Navbar({
                     w-full
                     rounded-full
                     bg-white
-                    opacity-60
+                    opacity-50
                     animate-ping
                   "
                 />
@@ -219,6 +223,10 @@ function Navbar({
           </div>
 
 
+          {/* =================================================
+              NAVIGATION
+          ================================================= */}
+
           <nav
             className="
               flex
@@ -230,7 +238,7 @@ function Navbar({
               text-xs
               font-medium
               w-full
-              sm:w-auto
+              lg:w-auto
               overflow-x-auto
               no-scrollbar
             "
@@ -264,15 +272,24 @@ function Navbar({
           </nav>
 
 
+          {/* =================================================
+              RIGHT SIDE
+          ================================================= */}
+
           <div
             className="
-              hidden
-              sm:flex
+              flex
               items-center
+              justify-between
+              lg:justify-end
               gap-2
-              flex-shrink-0
+              w-full
+              lg:w-auto
+              flex-wrap
             "
           >
+            {/* DEMO DESKTOP */}
+
             <button
               type="button"
 
@@ -281,9 +298,9 @@ function Navbar({
               }
 
               className="
+                hidden
+                lg:flex
                 group
-                relative
-                flex
                 items-center
                 gap-2
                 px-3.5
@@ -349,18 +366,76 @@ function Navbar({
             </button>
 
 
+            {/* UTILISATEUR CONNECTÉ */}
+
             {user && (
               <>
-                <span
+                <div
                   className="
-                    hidden
-                    lg:inline
+                    flex
+                    items-center
+                    gap-2
+                    px-3
+                    py-1.5
+                    rounded-full
+                    bg-white/5
+                    border
+                    border-white/10
                     text-xs
-                    text-muted
                   "
                 >
-                  {user.username}
-                </span>
+                  <span
+                    className="
+                      relative
+                      flex
+                      h-2
+                      w-2
+                    "
+                  >
+                    <span
+                      className="
+                        absolute
+                        inline-flex
+                        h-full
+                        w-full
+                        rounded-full
+                        bg-emerald-400
+                        opacity-60
+                        animate-ping
+                      "
+                    />
+
+                    <span
+                      className="
+                        relative
+                        inline-flex
+                        h-2
+                        w-2
+                        rounded-full
+                        bg-emerald-400
+                      "
+                    />
+                  </span>
+
+
+                  <span
+                    className="
+                      text-muted
+                    "
+                  >
+                    Connecté :
+                  </span>
+
+
+                  <span
+                    className="
+                      text-white
+                      font-medium
+                    "
+                  >
+                    {user.username}
+                  </span>
+                </div>
 
 
                 <button
@@ -374,17 +449,48 @@ function Navbar({
                     px-3
                     py-1.5
                     rounded-full
-                    bg-white/5
-                    hover:bg-white/10
+                    bg-red-500/10
+                    hover:bg-red-500/20
+                    border
+                    border-red-500/20
                     text-xs
-                    text-muted
-                    hover:text-white
+                    text-red-400
+                    hover:text-red-300
                     transition-all
                   "
                 >
-                  Logout
+                  Déconnexion
                 </button>
               </>
+            )}
+
+
+            {/* UTILISATEUR NON CONNECTÉ */}
+
+            {!user && (
+              <button
+                type="button"
+
+                onClick={() =>
+                  navigate(
+                    "/login"
+                  )
+                }
+
+                className="
+                  px-4
+                  py-1.5
+                  rounded-full
+                  btn-solid
+                  text-xs
+                  font-medium
+                  transition-all
+                  hover:scale-[1.02]
+                  active:scale-95
+                "
+              >
+                Connexion
+              </button>
             )}
           </div>
         </div>
@@ -392,6 +498,12 @@ function Navbar({
     );
   }
 
+
+  /*
+   * =====================================================
+   * TACTICAL THEME
+   * =====================================================
+   */
 
   return (
     <header
@@ -414,19 +526,23 @@ function Navbar({
           mx-auto
           flex
           flex-col
-          sm:flex-row
+          lg:flex-row
           items-center
           justify-between
           gap-3
         "
       >
+        {/* =================================================
+            LOGO + DEMO MOBILE
+        ================================================= */}
+
         <div
           className="
             flex
             items-center
             justify-between
             w-full
-            sm:w-auto
+            lg:w-auto
             gap-3
           "
         >
@@ -479,7 +595,7 @@ function Navbar({
               <span
                 className="
                   hidden
-                  lg:inline-block
+                  xl:inline-block
                   text-[10px]
                   font-mono
                   text-emerald-500/80
@@ -500,7 +616,7 @@ function Navbar({
             }
 
             className="
-              sm:hidden
+              lg:hidden
               flex
               items-center
               gap-1.5
@@ -561,6 +677,10 @@ function Navbar({
         </div>
 
 
+        {/* =================================================
+            NAVIGATION
+        ================================================= */}
+
         <nav
           className="
             flex
@@ -576,7 +696,7 @@ function Navbar({
             overflow-x-auto
             no-scrollbar
             w-full
-            sm:w-auto
+            lg:w-auto
           "
         >
           {user && (
@@ -608,15 +728,24 @@ function Navbar({
         </nav>
 
 
+        {/* =================================================
+            RIGHT SIDE
+        ================================================= */}
+
         <div
           className="
-            hidden
-            sm:flex
+            flex
             items-center
+            justify-between
+            lg:justify-end
             gap-2
-            flex-shrink-0
+            w-full
+            lg:w-auto
+            flex-wrap
           "
         >
+          {/* DEMO DESKTOP */}
+
           <button
             type="button"
 
@@ -625,8 +754,9 @@ function Navbar({
             }
 
             className="
+              hidden
+              lg:flex
               group
-              flex
               items-center
               gap-2
               px-3.5
@@ -696,21 +826,21 @@ function Navbar({
           </button>
 
 
+          {/* CONNECTÉ */}
+
           {user && (
             <>
               <div
                 className="
-                  hidden
-                  lg:flex
+                  flex
                   items-center
                   gap-2
                   px-2.5
-                  py-1
+                  py-1.5
                   rounded
                   bg-emerald-950/40
                   border
                   border-emerald-500/30
-                  text-emerald-400
                   text-xs
                   font-mono
                 "
@@ -725,7 +855,24 @@ function Navbar({
                   "
                 />
 
-                {user.username}
+
+                <span
+                  className="
+                    text-slate-500
+                  "
+                >
+                  USER:
+                </span>
+
+
+                <span
+                  className="
+                    text-emerald-400
+                    font-bold
+                  "
+                >
+                  {user.username}
+                </span>
               </div>
 
 
@@ -737,8 +884,6 @@ function Navbar({
                 }
 
                 className="
-                  hidden
-                  md:block
                   px-3
                   py-1.5
                   rounded
@@ -748,6 +893,7 @@ function Navbar({
                   text-red-400
                   font-mono
                   text-[10px]
+                  font-bold
                   hover:bg-red-950/40
                   transition-colors
                 "
@@ -755,6 +901,38 @@ function Navbar({
                 LOGOUT
               </button>
             </>
+          )}
+
+
+          {/* NON CONNECTÉ */}
+
+          {!user && (
+            <button
+              type="button"
+
+              onClick={() =>
+                navigate(
+                  "/login"
+                )
+              }
+
+              className="
+                px-4
+                py-1.5
+                rounded
+                bg-emerald-600
+                hover:bg-emerald-500
+                text-black
+                font-mono
+                text-[10px]
+                font-bold
+                uppercase
+                transition-all
+                active:scale-95
+              "
+            >
+              LOGIN
+            </button>
           )}
         </div>
       </div>
