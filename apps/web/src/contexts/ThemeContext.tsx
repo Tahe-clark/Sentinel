@@ -49,14 +49,24 @@ export function ThemeProvider({
         );
 
 
+      /*
+       * Si l'utilisateur a déjà choisi
+       * un thème, on conserve son choix.
+       */
       if (
-        saved === "glass"
+        saved === "glass" ||
+        saved === "tactical"
       ) {
-        return "glass";
+        return saved;
       }
 
 
-      return "tactical";
+      /*
+       * Nouveau visiteur :
+       * le thème Glass / Apple devient
+       * le thème par défaut.
+       */
+      return "glass";
     });
 
 
@@ -79,18 +89,24 @@ export function ThemeProvider({
     ) {
       document.body.className =
         "theme-tactical-body font-sans antialiased min-h-screen flex flex-col relative selection:bg-emerald-500 selection:text-black";
+
     } else {
       document.body.className =
         "theme-glass-body font-sans antialiased min-h-screen flex flex-col relative selection:bg-blue-500 selection:text-white";
     }
 
-  }, [theme]);
+  }, [
+    theme,
+  ]);
 
 
   function toggleTheme() {
     setTheme(
-      (current) =>
-        current === "tactical"
+      (
+        current
+      ) =>
+        current ===
+          "tactical"
           ? "glass"
           : "tactical"
     );

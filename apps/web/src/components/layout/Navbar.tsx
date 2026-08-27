@@ -68,6 +68,12 @@ function Navbar({
   }
 
 
+  /*
+   * =====================================================
+   * GLASS / APPLE THEME
+   * =====================================================
+   */
+
   if (
     theme === "glass"
   ) {
@@ -105,9 +111,7 @@ function Navbar({
             shadow-sm
           "
         >
-          {/* =================================================
-              LOGO + DEMO MOBILE
-          ================================================= */}
+          {/* LOGO + DEMO MOBILE */}
 
           <div
             className="
@@ -223,9 +227,7 @@ function Navbar({
           </div>
 
 
-          {/* =================================================
-              NAVIGATION
-          ================================================= */}
+          {/* NAVIGATION */}
 
           <nav
             className="
@@ -243,7 +245,7 @@ function Navbar({
               no-scrollbar
             "
           >
-            {user && (
+            {user ? (
               <>
                 <GlassNav
                   to="/dashboard"
@@ -260,21 +262,16 @@ function Navbar({
                   label="Appairer"
                 />
               </>
-            )}
-
-
-            {!user && (
+            ) : (
               <GlassNav
-                to="/login"
-                label="Connexion"
+                to="/emitter"
+                label="Émetteur"
               />
             )}
           </nav>
 
 
-          {/* =================================================
-              RIGHT SIDE
-          ================================================= */}
+          {/* RIGHT SIDE */}
 
           <div
             className="
@@ -288,8 +285,6 @@ function Navbar({
               flex-wrap
             "
           >
-            {/* DEMO DESKTOP */}
-
             <button
               type="button"
 
@@ -366,9 +361,7 @@ function Navbar({
             </button>
 
 
-            {/* UTILISATEUR CONNECTÉ */}
-
-            {user && (
+            {user ? (
               <>
                 <div
                   className="
@@ -462,12 +455,7 @@ function Navbar({
                   Déconnexion
                 </button>
               </>
-            )}
-
-
-            {/* UTILISATEUR NON CONNECTÉ */}
-
-            {!user && (
+            ) : (
               <button
                 type="button"
 
@@ -532,9 +520,7 @@ function Navbar({
           gap-3
         "
       >
-        {/* =================================================
-            LOGO + DEMO MOBILE
-        ================================================= */}
+        {/* LOGO + DEMO MOBILE */}
 
         <div
           className="
@@ -635,51 +621,14 @@ function Navbar({
               active:scale-95
             "
           >
-            <span
-              className="
-                relative
-                flex
-                h-1.5
-                w-1.5
-              "
-            >
-              <span
-                className="
-                  absolute
-                  inline-flex
-                  h-full
-                  w-full
-                  rounded-full
-                  bg-black
-                  opacity-50
-                  animate-ping
-                "
-              />
-
-              <span
-                className="
-                  relative
-                  inline-flex
-                  h-1.5
-                  w-1.5
-                  rounded-full
-                  bg-black
-                "
-              />
-            </span>
-
-
             <PlayIcon />
-
 
             DÉMO
           </button>
         </div>
 
 
-        {/* =================================================
-            NAVIGATION
-        ================================================= */}
+        {/* NAVIGATION */}
 
         <nav
           className="
@@ -699,7 +648,7 @@ function Navbar({
             lg:w-auto
           "
         >
-          {user && (
+          {user ? (
             <>
               <TacticalNav
                 to="/dashboard"
@@ -716,21 +665,16 @@ function Navbar({
                 label="03. APPAIRAGE"
               />
             </>
-          )}
-
-
-          {!user && (
+          ) : (
             <TacticalNav
-              to="/login"
-              label="04. LOGIN"
+              to="/emitter"
+              label="02. ÉMETTEUR"
             />
           )}
         </nav>
 
 
-        {/* =================================================
-            RIGHT SIDE
-        ================================================= */}
+        {/* RIGHT SIDE */}
 
         <div
           className="
@@ -744,8 +688,6 @@ function Navbar({
             flex-wrap
           "
         >
-          {/* DEMO DESKTOP */}
-
           <button
             type="button"
 
@@ -756,7 +698,6 @@ function Navbar({
             className="
               hidden
               lg:flex
-              group
               items-center
               gap-2
               px-3.5
@@ -771,64 +712,19 @@ function Navbar({
               text-[10px]
               font-black
               shadow-lg
-              shadow-emerald-500/10
               transition-all
-              duration-200
               hover:scale-[1.04]
               active:scale-95
             "
           >
-            <span
-              className="
-                relative
-                flex
-                h-2
-                w-2
-              "
-            >
-              <span
-                className="
-                  absolute
-                  inline-flex
-                  h-full
-                  w-full
-                  rounded-full
-                  bg-black
-                  opacity-40
-                  animate-ping
-                "
-              />
-
-              <span
-                className="
-                  relative
-                  inline-flex
-                  h-2
-                  w-2
-                  rounded-full
-                  bg-black
-                "
-              />
-            </span>
-
-
-            <span
-              className="
-                transition-transform
-                group-hover:scale-110
-              "
-            >
-              <PlayIcon />
-            </span>
+            <PlayIcon />
 
 
             VOIR LA DÉMO
           </button>
 
 
-          {/* CONNECTÉ */}
-
-          {user && (
+          {user ? (
             <>
               <div
                 className="
@@ -901,12 +797,7 @@ function Navbar({
                 LOGOUT
               </button>
             </>
-          )}
-
-
-          {/* NON CONNECTÉ */}
-
-          {!user && (
+          ) : (
             <button
               type="button"
 
